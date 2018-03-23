@@ -70,12 +70,6 @@ public:
             void                giveThreadPoolName();
 
             ssize_t             getKernelReferences(size_t count, uintptr_t* buf);
-                                // This refcount includes:
-                                // 1. Strong references to the node by this  and other processes
-                                // 2. Temporary strong references held by the kernel during a
-                                //    transaction on the node.
-                                // It does NOT include local strong references to the node
-            ssize_t             getStrongRefCountForNodeByHandle(int32_t handle);
             size_t              getMmapSize();
 private:
     friend class IPCThreadState;
@@ -123,7 +117,7 @@ private:
             bool                mThreadPoolStarted;
             bool                mSpawnThreadOnStart;
     volatile int32_t            mThreadPoolSeq;
-            const size_t        mMmapSize;
+            size_t              mMmapSize;
 };
 
 }; // namespace hardware
