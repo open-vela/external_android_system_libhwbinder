@@ -117,7 +117,7 @@ private:
             bool                mThreadPoolStarted;
             bool                mSpawnThreadOnStart;
     volatile int32_t            mThreadPoolSeq;
-            size_t              mMmapSize;
+            const size_t        mMmapSize;
 };
 
 }; // namespace hardware
