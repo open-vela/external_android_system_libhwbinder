@@ -444,12 +444,15 @@ status_t IPCThreadState::getAndExecuteCommand()
 
         pthread_mutex_lock(&mProcess->mThreadCountLock);
         mProcess->mExecutingThreadsCount--;
-        if (mProcess->mExecutingThreadsCount < mProcess->mMaxThreads && mProcess->mMaxThreads > 1 &&
+        if (mProcess->mExecutingThreadsCount < mProcess->mMaxThreads &&
             mProcess->mStarvationStartTimeMs != 0) {
             int64_t starvationTimeMs = uptimeMillis() - mProcess->mStarvationStartTimeMs;
             if (starvationTimeMs > 100) {
-                ALOGW("All binder threads in pool (%zu threads) busy for %" PRId64 " ms",
-                      mProcess->mMaxThreads, starvationTimeMs);
+                // If there is only a single-threaded client, nobody would be blocked
+                // on this, and it's not really starvation. (see b/37647467)
+                ALOGW("All binder threads in pool (%zu threads) busy for %" PRId64 " ms%s",
+                      mProcess->mMaxThreads, starvationTimeMs,
+                      mProcess->mMaxThreads > 1 ? "" : " (may be a false alarm)");
             }
             mProcess->mStarvationStartTimeMs = 0;
         }
