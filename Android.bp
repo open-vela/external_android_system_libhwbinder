@@ -18,6 +18,10 @@ subdirs = [
 
 cc_library {
     name: "libhwbinder",
+    defaults: [
+        "hwbinder_pgo",
+        "hwbinder_lto",
+    ],
     shared_libs: [
         "libbase",
         "liblog",
@@ -63,4 +67,26 @@ cc_library {
         "-Wall",
         "-Werror",
     ],
+}
+
+// Provide pgo property to build hwbinder with PGO
+cc_defaults {
+    name: "hwbinder_pgo",
+    pgo: {
+        instrumentation: true,
+        profile_file: "hwbinder/hwbinder.profdata",
+        benchmarks: ["hwbinder"],
+        enable_profile_use: true,
+    },
+}
+// Provide lto property to build hwbinder with LTO
+cc_defaults {
+    name: "hwbinder_lto",
+    target: {
+        android: {
+            lto: {
+                thin: true,
+            },
+        },
+    },
 }
