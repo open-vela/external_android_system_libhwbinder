@@ -74,14 +74,13 @@ cc_library {
     ],
 }
 
-// Explicitly provide a no lto variant, to workaround the issue that we can't
-// detect non-lto users of the module in Android.mk.
+// Explicitly provide a no lto, no PGO variant, to workaround the issue that we
+// can't detect non-lto users of the module in Android.mk.
 // http://b/77320844
 cc_library {
-    name: "libhwbinder_nolto",
+    name: "libhwbinder_noltopgo",
     defaults: [
         "libhwbinder_defaults",
-        "hwbinder_pgo",
     ],
 }
 
