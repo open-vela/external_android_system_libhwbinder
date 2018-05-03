@@ -22,6 +22,8 @@
 #include <hwbinder/ProcessState.h>
 #include <utils/Vector.h>
 
+#include <functional>
+
 #if defined(_WIN32)
 typedef  int  uid_t;
 #endif
@@ -95,9 +97,13 @@ public:
             bool                isLooperThread();
             bool                isOnlyBinderThread();
 
-private:
-                                IPCThreadState();
-                                ~IPCThreadState();
+            // Tasks which are done on the binder thread after the thread returns to the
+            // threadpool.
+            void addPostCommandTask(const std::function<void(void)>& task);
+
+           private:
+            IPCThreadState();
+            ~IPCThreadState();
 
             status_t            sendReply(const Parcel& reply, uint32_t flags);
             status_t            waitForResponse(Parcel *reply,
@@ -136,6 +142,8 @@ private:
             sp<BHwBinder>         mContextObject;
             bool                mIsLooper;
             bool mIsPollingThread;
+
+            std::vector<std::function<void(void)>> mPostCommandTasks;
 };
 
 }; // namespace hardware

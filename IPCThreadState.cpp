@@ -23,6 +23,7 @@
 #include <hwbinder/TextOutput.h>
 #include <hwbinder/binder_kernel.h>
 
+#include <android-base/macros.h>
 #include <utils/Log.h>
 #include <utils/SystemClock.h>
 #include <utils/threads.h>
@@ -458,6 +459,16 @@ status_t IPCThreadState::getAndExecuteCommand()
         }
         pthread_cond_broadcast(&mProcess->mThreadCountDecrement);
         pthread_mutex_unlock(&mProcess->mThreadCountLock);
+    }
+
+    if (UNLIKELY(!mPostCommandTasks.empty())) {
+        // make a copy in case the post transaction task makes a binder
+        // call and that other process calls back into us
+        std::vector<std::function<void(void)>> tasks = mPostCommandTasks;
+        mPostCommandTasks.clear();
+        for (auto func : tasks) {
+            func();
+        }
     }
 
     return result;
@@ -976,6 +987,10 @@ bool IPCThreadState::isLooperThread()
 
 bool IPCThreadState::isOnlyBinderThread() {
     return (mIsLooper && mProcess->mMaxThreads <= 1) || mIsPollingThread;
+}
+
+void IPCThreadState::addPostCommandTask(const std::function<void(void)>& task) {
+    mPostCommandTasks.push_back(task);
 }
 
 status_t IPCThreadState::executeCommand(int32_t cmd)
