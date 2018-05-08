@@ -80,12 +80,10 @@ public:
 
     static  void                shutdown();
 
-    // Call this to disable switching threads to background scheduling when
-    // receiving incoming IPC calls.  This is specifically here for the
-    // Android system process, since it expects to have background apps calling
-    // in to it but doesn't want to acquire locks in its services while in
-    // the background.
+            // TODO(b/66905301): remove symbol
+private:
     static  void                disableBackgroundScheduling(bool disable);
+public:
 
             // Call blocks until the number of executing binder threads is less than
             // the maximum number of binder threads threads allowed for this process.
