@@ -275,7 +275,6 @@ static pthread_mutex_t gTLSMutex = PTHREAD_MUTEX_INITIALIZER;
 static bool gHaveTLS = false;
 static pthread_key_t gTLS = 0;
 static bool gShutdown = false;
-static bool gDisableBackgroundScheduling = false;
 
 IPCThreadState* IPCThreadState::self()
 {
@@ -333,10 +332,8 @@ void IPCThreadState::shutdown()
     }
 }
 
-void IPCThreadState::disableBackgroundScheduling(bool disable)
-{
-    gDisableBackgroundScheduling = disable;
-}
+// TODO(b/66905301): remove symbol
+void IPCThreadState::disableBackgroundScheduling(bool /* disable */) {}
 
 sp<ProcessState> IPCThreadState::process()
 {
