@@ -68,7 +68,7 @@ protected:
 sp<ProcessState> ProcessState::self()
 {
     Mutex::Autolock _l(gProcessMutex);
-    if (gProcess != NULL) {
+    if (gProcess != nullptr) {
         return gProcess;
     }
     gProcess = new ProcessState(DEFAULT_BINDER_VM_SIZE);
@@ -82,7 +82,7 @@ sp<ProcessState> ProcessState::selfOrNull() {
 
 sp<ProcessState> ProcessState::initWithMmapSize(size_t mmap_size) {
     Mutex::Autolock _l(gProcessMutex);
-    if (gProcess != NULL) {
+    if (gProcess != nullptr) {
         LOG_ALWAYS_FATAL_IF(mmap_size != gProcess->getMmapSize(),
                 "ProcessState already initialized with a different mmap size.");
         return gProcess;
@@ -112,18 +112,18 @@ sp<IBinder> ProcessState::getContextObject(const String16& name, const sp<IBinde
 {
     mLock.lock();
     sp<IBinder> object(
-        mContexts.indexOfKey(name) >= 0 ? mContexts.valueFor(name) : NULL);
+        mContexts.indexOfKey(name) >= 0 ? mContexts.valueFor(name) : nullptr);
     mLock.unlock();
 
     //printf("Getting context object %s for %p\n", String8(name).string(), caller.get());
 
-    if (object != NULL) return object;
+    if (object != nullptr) return object;
 
     // Don't attempt to retrieve contexts if we manage them
     if (mManagesContexts) {
         ALOGE("getContextObject(%s) failed, but we manage the contexts!\n",
             String8(name).string());
-        return NULL;
+        return nullptr;
     }
 
     IPCThreadState* ipc = IPCThreadState::self();
@@ -140,7 +140,7 @@ sp<IBinder> ProcessState::getContextObject(const String16& name, const sp<IBinde
 
     ipc->flushCommands();
 
-    if (object != NULL) setContextObject(object, name);
+    if (object != nullptr) setContextObject(object, name);
     return object;
 }
 
@@ -172,8 +172,8 @@ bool ProcessState::becomeContextManager(context_check_func checkFunc, void* user
         if (result == 0) {
             mManagesContexts = true;
         } else if (result == -1) {
-            mBinderContextCheckFunc = NULL;
-            mBinderContextUserData = NULL;
+            mBinderContextCheckFunc = nullptr;
+            mBinderContextUserData = nullptr;
             ALOGE("Binder ioctl to become context manager failed: %s\n", strerror(errno));
         }
     }
@@ -189,7 +189,7 @@ bool ProcessState::becomeContextManager(context_check_func checkFunc, void* user
 ssize_t ProcessState::getKernelReferences(size_t buf_count, uintptr_t* buf) {
     binder_node_debug_info info = {};
 
-    uintptr_t* end = buf ? buf + buf_count : NULL;
+    uintptr_t* end = buf ? buf + buf_count : nullptr;
     size_t count = 0;
 
     do {
@@ -217,10 +217,10 @@ ProcessState::handle_entry* ProcessState::lookupHandleLocked(int32_t handle)
     const size_t N=mHandleToObject.size();
     if (N <= (size_t)handle) {
         handle_entry e;
-        e.binder = NULL;
-        e.refs = NULL;
+        e.binder = nullptr;
+        e.refs = nullptr;
         status_t err = mHandleToObject.insertAt(e, N, handle+1-N);
-        if (err < NO_ERROR) return NULL;
+        if (err < NO_ERROR) return nullptr;
     }
     return &mHandleToObject.editItemAt(handle);
 }
@@ -233,12 +233,12 @@ sp<IBinder> ProcessState::getStrongProxyForHandle(int32_t handle)
 
     handle_entry* e = lookupHandleLocked(handle);
 
-    if (e != NULL) {
+    if (e != nullptr) {
         // We need to create a new BpHwBinder if there isn't currently one, OR we
         // are unable to acquire a weak reference on this current one.  See comment
         // in getWeakProxyForHandle() for more info about this.
         IBinder* b = e->binder;
-        if (b == NULL || !e->refs->attemptIncWeak(this)) {
+        if (b == nullptr || !e->refs->attemptIncWeak(this)) {
             b = new BpHwBinder(handle);
             e->binder = b;
             if (b) e->refs = b->getWeakRefs();
@@ -263,7 +263,7 @@ wp<IBinder> ProcessState::getWeakProxyForHandle(int32_t handle)
 
     handle_entry* e = lookupHandleLocked(handle);
 
-    if (e != NULL) {
+    if (e != nullptr) {
         // We need to create a new BpHwBinder if there isn't currently one, OR we
         // are unable to acquire a weak reference on this current one.  The
         // attemptIncWeak() is safe because we know the BpHwBinder destructor will always
@@ -272,7 +272,7 @@ wp<IBinder> ProcessState::getWeakProxyForHandle(int32_t handle)
         // releasing a reference on this BpHwBinder, and a new reference on its handle
         // arriving from the driver.
         IBinder* b = e->binder;
-        if (b == NULL || !e->refs->attemptIncWeak(this)) {
+        if (b == nullptr || !e->refs->attemptIncWeak(this)) {
             b = new BpHwBinder(handle);
             result = b;
             e->binder = b;
@@ -295,7 +295,7 @@ void ProcessState::expungeHandle(int32_t handle, IBinder* binder)
     // This handle may have already been replaced with a new BpHwBinder
     // (if someone failed the AttemptIncWeak() above); we don't want
     // to overwrite it.
-    if (e && e->binder == binder) e->binder = NULL;
+    if (e && e->binder == binder) e->binder = nullptr;
 }
 
 String8 ProcessState::makeBinderThreadName() {
@@ -381,8 +381,8 @@ ProcessState::ProcessState(size_t mmap_size)
     , mMaxThreads(DEFAULT_MAX_BINDER_THREADS)
     , mStarvationStartTimeMs(0)
     , mManagesContexts(false)
-    , mBinderContextCheckFunc(NULL)
-    , mBinderContextUserData(NULL)
+    , mBinderContextCheckFunc(nullptr)
+    , mBinderContextUserData(nullptr)
     , mThreadPoolStarted(false)
     , mSpawnThreadOnStart(true)
     , mThreadPoolSeq(1)
@@ -390,7 +390,7 @@ ProcessState::ProcessState(size_t mmap_size)
 {
     if (mDriverFD >= 0) {
         // mmap the binder, providing a chunk of virtual address space to receive transactions.
-        mVMStart = mmap(0, mMmapSize, PROT_READ, MAP_PRIVATE | MAP_NORESERVE, mDriverFD, 0);
+        mVMStart = mmap(nullptr, mMmapSize, PROT_READ, MAP_PRIVATE | MAP_NORESERVE, mDriverFD, 0);
         if (mVMStart == MAP_FAILED) {
             // *sigh*
             ALOGE("Using /dev/hwbinder failed: unable to mmap transaction memory.\n");
