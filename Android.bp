@@ -23,6 +23,7 @@ cc_defaults {
         "liblog",
         "libcutils",
         "libutils",
+        "libbinderthreadstate",
     ],
     export_shared_lib_headers: [
         "libbase",
@@ -71,7 +72,7 @@ cc_library {
     defaults: [
         "libhwbinder_defaults",
         "hwbinder_pgo",
-        "hwbinder_lto"
+        "hwbinder_lto",
     ],
 }
 
@@ -95,6 +96,7 @@ cc_defaults {
         enable_profile_use: true,
     },
 }
+
 // Provide lto property to build hwbinder with LTO
 cc_defaults {
     name: "hwbinder_lto",
