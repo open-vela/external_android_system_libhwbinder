@@ -215,13 +215,6 @@ void BpHwBinder::sendObituary()
     }
 }
 
-// Returns the strong refcount on the object this proxy points to, or
-// -1 in case of failure.
-ssize_t BpHwBinder::getNodeStrongRefCount()
-{
-    return ProcessState::self()->getStrongRefCountForNodeByHandle(mHandle);
-}
-
 void BpHwBinder::reportOneDeath(const Obituary& obit)
 {
     sp<DeathRecipient> recipient = obit.recipient.promote();
