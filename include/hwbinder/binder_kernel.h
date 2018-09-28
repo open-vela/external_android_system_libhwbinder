@@ -36,4 +36,15 @@ enum {
         FLAT_BINDER_FLAG_INHERIT_RT = 0x800,
 };
 
+struct binder_node_info_for_ref {
+        __u32            handle;
+        __u32            strong_count;
+        __u32            weak_count;
+        __u32            reserved1;
+        __u32            reserved2;
+        __u32            reserved3;
+};
+
+#define BINDER_GET_NODE_INFO_FOR_REF	_IOWR('b', 12, struct binder_node_info_for_ref)
+
 #endif // ANDROID_HARDWARE_BINDER_KERNEL_H

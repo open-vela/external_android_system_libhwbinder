@@ -57,7 +57,12 @@ public:
 
             status_t    setConstantData(const void* data, size_t size);
             void        sendObituary();
-
+                        // This refcount includes:
+                        // 1. Strong references to the node by this and other processes
+                        // 2. Temporary strong references held by the kernel during a
+                        //    transaction on the node.
+                        // It does NOT include local strong references to the node
+            ssize_t     getNodeStrongRefCount();
     class ObjectManager
     {
     public:
