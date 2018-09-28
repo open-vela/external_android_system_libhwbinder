@@ -88,6 +88,7 @@ protected:
     virtual void            onLastStrongRef(const void* id);
     virtual bool            onIncStrongAttempted(uint32_t flags, const void* id);
 
+public:
     inline  IBinder*        remote() const          { return mRemote; }
 
 private:
