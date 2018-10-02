@@ -17,6 +17,7 @@
 #define LOG_TAG "hw-IPCThreadState"
 
 #include <hwbinder/IPCThreadState.h>
+#include <binderthreadstate/IPCThreadStateBase.h>
 
 #include <hwbinder/Binder.h>
 #include <hwbinder/BpHwBinder.h>
@@ -764,6 +765,7 @@ IPCThreadState::IPCThreadState()
 
     // TODO(b/67742352): remove this variable from the class
     (void)mMyThreadId;
+    mIPCThreadStateBase = IPCThreadStateBase::self();
 }
 
 IPCThreadState::~IPCThreadState()
@@ -1114,6 +1116,9 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
                 "Not enough command data for brTRANSACTION");
             if (result != NO_ERROR) break;
 
+            // Record the fact that we're in a hwbinder call
+            mIPCThreadStateBase->pushCurrentState(
+                IPCThreadStateBase::CallState::HWBINDER);
             Parcel buffer;
             buffer.ipcSetDataReference(
                 reinterpret_cast<const uint8_t*>(tr.data.ptr.buffer),
@@ -1177,6 +1182,7 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
                 error = mContextObject->transact(tr.code, buffer, &reply, tr.flags, reply_callback);
             }
 
+            mIPCThreadStateBase->popCurrentState();
             if ((tr.flags & TF_ONE_WAY) == 0) {
                 if (!reply_sent) {
                     // Should have been a reply but there wasn't, so there
@@ -1247,6 +1253,11 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
     }
 
     return result;
+}
+
+bool IPCThreadState::isServingCall() const
+{
+    return mIPCThreadStateBase->getCurrentBinderCallState() == IPCThreadStateBase::CallState::HWBINDER;
 }
 
 void IPCThreadState::threadDestructor(void *st)
