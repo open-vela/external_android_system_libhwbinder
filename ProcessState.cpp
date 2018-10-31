@@ -336,24 +336,37 @@ void ProcessState::spawnPooledThread(bool isMain)
 }
 
 status_t ProcessState::setThreadPoolConfiguration(size_t maxThreads, bool callerJoinsPool) {
-    LOG_ALWAYS_FATAL_IF(maxThreads < 1, "Binder threadpool must have a minimum of one thread.");
-    status_t result = NO_ERROR;
+    // if the caller joins the pool, then there will be one thread which is impossible.
+    LOG_ALWAYS_FATAL_IF(maxThreads == 0 && callerJoinsPool,
+           "Binder threadpool must have a minimum of one thread if caller joins pool.");
+
+    size_t threadsToAllocate = maxThreads;
+
+    // If the caller is going to join the pool it will contribute one thread to the threadpool.
+    // This is part of the API's contract.
+    if (callerJoinsPool) threadsToAllocate--;
+
+    // If we can, spawn one thread from userspace when the threadpool is started. This ensures
+    // that there is always a thread available to start more threads as soon as the threadpool
+    // is started.
+    bool spawnThreadOnStart = threadsToAllocate > 0;
+    if (spawnThreadOnStart) threadsToAllocate--;
+
     // the BINDER_SET_MAX_THREADS ioctl really tells the kernel how many threads
     // it's allowed to spawn, *in addition* to any threads we may have already
-    // spawned locally. If 'callerJoinsPool' is true, it means that the caller
-    // will join the threadpool, and so the kernel needs to create one less thread.
-    // If 'callerJoinsPool' is false, we will still spawn a thread locally, and we should
-    // also tell the kernel to create one less thread than what was requested here.
-    size_t kernelMaxThreads = maxThreads - 1;
-    if (ioctl(mDriverFD, BINDER_SET_MAX_THREADS, &kernelMaxThreads) != -1) {
-        AutoMutex _l(mLock);
-        mMaxThreads = maxThreads;
-        mSpawnThreadOnStart = !callerJoinsPool;
-    } else {
-        result = -errno;
-        ALOGE("Binder ioctl to set max threads failed: %s", strerror(-result));
+    // spawned locally.
+    size_t kernelMaxThreads = threadsToAllocate;
+
+    AutoMutex _l(mLock);
+    if (ioctl(mDriverFD, BINDER_SET_MAX_THREADS, &kernelMaxThreads) == -1) {
+        ALOGE("Binder ioctl to set max threads failed: %s", strerror(errno));
+        return -errno;
     }
-    return result;
+
+    mMaxThreads = maxThreads;
+    mSpawnThreadOnStart = spawnThreadOnStart;
+
+    return NO_ERROR;
 }
 
 size_t ProcessState::getMaxThreads() {
