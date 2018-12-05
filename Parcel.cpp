@@ -1708,6 +1708,24 @@ status_t Parcel::readNullableNativeHandleNoDup(const native_handle_t **handle,
         return status;
     }
 
+    int numFds = (*handle)->numFds;
+    int numInts = (*handle)->numInts;
+
+    if (numFds < 0 || numFds > NATIVE_HANDLE_MAX_FDS) {
+        ALOGE("Received native_handle with invalid number of fds.");
+        return BAD_VALUE;
+    }
+
+    if (numInts < 0 || numInts > NATIVE_HANDLE_MAX_INTS) {
+        ALOGE("Received native_handle with invalid number of ints.");
+        return BAD_VALUE;
+    }
+
+    if (nativeHandleSize != (sizeof(native_handle_t) + ((numFds + numInts) * sizeof(int)))) {
+        ALOGE("Size of native_handle doesn't match.");
+        return BAD_VALUE;
+    }
+
     const binder_fd_array_object* fd_array_obj = readObject<binder_fd_array_object>();
 
     if (fd_array_obj == nullptr || fd_array_obj->hdr.type != BINDER_TYPE_FDA) {
@@ -1715,7 +1733,7 @@ status_t Parcel::readNullableNativeHandleNoDup(const native_handle_t **handle,
         return BAD_VALUE;
     }
 
-    if (static_cast<int>(fd_array_obj->num_fds) != (*handle)->numFds) {
+    if (static_cast<int>(fd_array_obj->num_fds) != numFds) {
         ALOGE("Number of native handles does not match.");
         return BAD_VALUE;
     }
