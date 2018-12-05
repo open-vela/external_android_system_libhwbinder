@@ -37,13 +37,13 @@ public:
                                     TransactCallback callback = nullptr);
 
     virtual status_t    linkToDeath(const sp<DeathRecipient>& recipient,
-                                    void* cookie = nullptr,
+                                    void* cookie = NULL,
                                     uint32_t flags = 0);
 
     virtual status_t    unlinkToDeath(  const wp<DeathRecipient>& recipient,
-                                        void* cookie = nullptr,
+                                        void* cookie = NULL,
                                         uint32_t flags = 0,
-                                        wp<DeathRecipient>* outRecipient = nullptr);
+                                        wp<DeathRecipient>* outRecipient = NULL);
 
     virtual void        attachObject(   const void* objectID,
                                         void* object,
@@ -56,9 +56,6 @@ public:
 
     int                 getMinSchedulingPolicy();
     int                 getMinSchedulingPriority();
-
-    bool                isRequestingSid();
-
 protected:
     virtual             ~BHwBinder();
 
@@ -67,10 +64,6 @@ protected:
                                     Parcel* reply,
                                     uint32_t flags = 0,
                                     TransactCallback callback = nullptr);
-
-    // This must be called before the object is sent to another process. Not thread safe.
-    void                setRequestingSid(bool requestSid);
-
     int                 mSchedPolicy; // policy to run transaction from this node at
     // priority [-20..19] for SCHED_NORMAL, [1..99] for SCHED_FIFO/RT
     int                 mSchedPriority;
@@ -79,8 +72,6 @@ private:
             BHwBinder&    operator=(const BHwBinder& o);
 
     class Extras;
-
-    Extras*             getOrCreateExtras();
 
     std::atomic<Extras*> mExtras;
             void*       mReserved0;
@@ -97,7 +88,6 @@ protected:
     virtual void            onLastStrongRef(const void* id);
     virtual bool            onIncStrongAttempted(uint32_t flags, const void* id);
 
-public:
     inline  IBinder*        remote() const          { return mRemote; }
 
 private:
