@@ -473,7 +473,7 @@ status_t IPCThreadState::getAndExecuteCommand()
         // call and that other process calls back into us
         std::vector<std::function<void(void)>> tasks = mPostCommandTasks;
         mPostCommandTasks.clear();
-        for (auto func : tasks) {
+        for (const auto& func : tasks) {
             func();
         }
     }
