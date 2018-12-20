@@ -92,8 +92,7 @@ public:
 
 private:
     friend class IPCThreadState;
-
-                                ProcessState(size_t mmap_size);
+            explicit            ProcessState(size_t mmap_size);
                                 ~ProcessState();
 
                                 ProcessState(const ProcessState& o);
