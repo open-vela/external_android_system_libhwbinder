@@ -217,7 +217,7 @@ status_t flatten_binder(const sp<ProcessState>& /*proc*/,
             int priority = local->getMinSchedulingPriority();
 
             obj.flags = priority & FLAT_BINDER_FLAG_PRIORITY_MASK;
-            obj.flags |= FLAT_BINDER_FLAG_ACCEPTS_FDS | FLAT_BINDER_FLAG_INHERIT_RT;
+            obj.flags |= FLAT_BINDER_FLAG_ACCEPTS_FDS;
             obj.flags |= (policy & 3) << FLAT_BINDER_FLAG_SCHEDPOLICY_SHIFT;
             if (local->isRequestingSid()) {
                 obj.flags |= FLAT_BINDER_FLAG_TXN_SECURITY_CTX;

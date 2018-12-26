@@ -36,7 +36,6 @@ class ProcessState : public virtual RefBase
 {
 public:
     static  sp<ProcessState>    self();
-    static  sp<ProcessState>    selfOrNull();
 
             void                setContextObject(const sp<IBinder>& object);
             sp<IBinder>         getContextObject(const sp<IBinder>& caller);
@@ -65,8 +64,6 @@ public:
 
             status_t            setThreadPoolConfiguration(size_t maxThreads, bool callerJoinsPool);
             void                giveThreadPoolName();
-
-            ssize_t             getKernelReferences(size_t count, uintptr_t* buf);
 
 private:
     friend class IPCThreadState;
