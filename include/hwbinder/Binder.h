@@ -56,6 +56,8 @@ public:
 
     int                 getMinSchedulingPolicy();
     int                 getMinSchedulingPriority();
+    bool                isRequestingSid();
+
 protected:
     virtual             ~BHwBinder();
 
@@ -67,6 +69,7 @@ protected:
     int                 mSchedPolicy; // policy to run transaction from this node at
     // priority [-20..19] for SCHED_NORMAL, [1..99] for SCHED_FIFO/RT
     int                 mSchedPriority;
+    bool                mRequestingSid;
 private:
                         BHwBinder(const BHwBinder& o);
             BHwBinder&    operator=(const BHwBinder& o);

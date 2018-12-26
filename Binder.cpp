@@ -67,7 +67,7 @@ public:
 
 // ---------------------------------------------------------------------------
 
-BHwBinder::BHwBinder() : mSchedPolicy(SCHED_NORMAL), mSchedPriority(0), mExtras(nullptr)
+BHwBinder::BHwBinder() : mSchedPolicy(SCHED_NORMAL), mSchedPriority(0), mRequestingSid(false), mExtras(nullptr)
 {
 }
 
@@ -77,6 +77,10 @@ int BHwBinder::getMinSchedulingPolicy() {
 
 int BHwBinder::getMinSchedulingPriority() {
     return mSchedPriority;
+}
+
+bool BHwBinder::isRequestingSid() {
+    return mRequestingSid;
 }
 
 status_t BHwBinder::transact(
