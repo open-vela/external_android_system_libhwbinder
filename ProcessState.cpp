@@ -18,10 +18,10 @@
 
 #include <hwbinder/ProcessState.h>
 
-#include <cutils/atomic.h>
 #include <hwbinder/BpHwBinder.h>
 #include <hwbinder/IPCThreadState.h>
 #include <hwbinder/binder_kernel.h>
+#include <utils/Atomic.h>
 #include <utils/Log.h>
 #include <utils/String8.h>
 #include <utils/threads.h>
@@ -39,7 +39,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define DEFAULT_BINDER_VM_SIZE ((1 * 1024 * 1024) - sysconf(_SC_PAGE_SIZE) * 2)
+#define BINDER_VM_SIZE ((1 * 1024 * 1024) - sysconf(_SC_PAGE_SIZE) * 2)
 #define DEFAULT_MAX_BINDER_THREADS 0
 
 // -------------------------------------------------------------------------
@@ -71,24 +71,12 @@ sp<ProcessState> ProcessState::self()
     if (gProcess != NULL) {
         return gProcess;
     }
-    gProcess = new ProcessState(DEFAULT_BINDER_VM_SIZE);
+    gProcess = new ProcessState;
     return gProcess;
 }
 
 sp<ProcessState> ProcessState::selfOrNull() {
     Mutex::Autolock _l(gProcessMutex);
-    return gProcess;
-}
-
-sp<ProcessState> ProcessState::initWithMmapSize(size_t mmap_size) {
-    Mutex::Autolock _l(gProcessMutex);
-    if (gProcess != NULL) {
-        LOG_ALWAYS_FATAL_IF(mmap_size != gProcess->getMmapSize(),
-                "ProcessState already initialized with a different mmap size.");
-        return gProcess;
-    }
-
-    gProcess = new ProcessState(mmap_size);
     return gProcess;
 }
 
@@ -220,10 +208,6 @@ ssize_t ProcessState::getKernelReferences(size_t buf_count, uintptr_t* buf) {
     return count;
 }
 
-size_t ProcessState::getMmapSize() {
-    return mMmapSize;
-}
-
 ProcessState::handle_entry* ProcessState::lookupHandleLocked(int32_t handle)
 {
     const size_t N=mHandleToObject.size();
@@ -349,10 +333,6 @@ status_t ProcessState::setThreadPoolConfiguration(size_t maxThreads, bool caller
     return result;
 }
 
-size_t ProcessState::getMaxThreads() {
-    return mMaxThreads;
-}
-
 void ProcessState::giveThreadPoolName() {
     androidSetThreadName( makeBinderThreadName().string() );
 }
@@ -384,7 +364,7 @@ static int open_driver()
     return fd;
 }
 
-ProcessState::ProcessState(size_t mmap_size)
+ProcessState::ProcessState()
     : mDriverFD(open_driver())
     , mVMStart(MAP_FAILED)
     , mThreadCountLock(PTHREAD_MUTEX_INITIALIZER)
@@ -398,11 +378,10 @@ ProcessState::ProcessState(size_t mmap_size)
     , mThreadPoolStarted(false)
     , mSpawnThreadOnStart(true)
     , mThreadPoolSeq(1)
-    , mMmapSize(mmap_size)
 {
     if (mDriverFD >= 0) {
         // mmap the binder, providing a chunk of virtual address space to receive transactions.
-        mVMStart = mmap(0, mMmapSize, PROT_READ, MAP_PRIVATE | MAP_NORESERVE, mDriverFD, 0);
+        mVMStart = mmap(0, BINDER_VM_SIZE, PROT_READ, MAP_PRIVATE | MAP_NORESERVE, mDriverFD, 0);
         if (mVMStart == MAP_FAILED) {
             // *sigh*
             ALOGE("Using /dev/hwbinder failed: unable to mmap transaction memory.\n");
@@ -419,7 +398,7 @@ ProcessState::~ProcessState()
 {
     if (mDriverFD >= 0) {
         if (mVMStart != MAP_FAILED) {
-            munmap(mVMStart, mMmapSize);
+            munmap(mVMStart, BINDER_VM_SIZE);
         }
         close(mDriverFD);
     }
