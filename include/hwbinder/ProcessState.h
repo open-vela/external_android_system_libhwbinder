@@ -77,6 +77,19 @@ public:
                                 // It does NOT include local strong references to the node
             ssize_t             getStrongRefCountForNodeByHandle(int32_t handle);
             size_t              getMmapSize();
+
+            enum class CallRestriction {
+                // all calls okay
+                NONE,
+                // log when calls are blocking
+                ERROR_IF_NOT_ONEWAY,
+                // abort process on blocking calls
+                FATAL_IF_NOT_ONEWAY,
+            };
+            // Sets calling restrictions for all transactions in this process. This must be called
+            // before any threads are spawned.
+            void setCallRestriction(CallRestriction restriction);
+
 private:
     friend class IPCThreadState;
 
@@ -124,6 +137,8 @@ private:
             bool                mSpawnThreadOnStart;
     volatile int32_t            mThreadPoolSeq;
             const size_t        mMmapSize;
+
+            CallRestriction     mCallRestriction;
 };
 
 }; // namespace hardware

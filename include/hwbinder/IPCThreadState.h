@@ -181,6 +181,8 @@ public:
 
             std::vector<std::function<void(void)>> mPostCommandTasks;
             IPCThreadStateBase *mIPCThreadStateBase;
+
+            ProcessState::CallRestriction mCallRestriction;
 };
 
 }; // namespace hardware
