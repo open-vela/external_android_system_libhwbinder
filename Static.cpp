@@ -73,8 +73,23 @@ TextOutput& aerr(gStderrTextOutput);
 
 // ------------ ProcessState.cpp
 
-Mutex& gProcessMutex = *new Mutex;
+Mutex gProcessMutex;
 sp<ProcessState> gProcess;
+
+class LibHwbinderIPCtStatics
+{
+public:
+    LibHwbinderIPCtStatics()
+    {
+    }
+    
+    ~LibHwbinderIPCtStatics()
+    {
+        IPCThreadState::shutdown();
+    }
+};
+
+static LibHwbinderIPCtStatics gIPCStatics;
 
 }   // namespace hardware
 }   // namespace android
