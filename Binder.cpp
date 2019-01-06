@@ -43,12 +43,12 @@ IBinder::~IBinder()
 
 BHwBinder* IBinder::localBinder()
 {
-    return NULL;
+    return nullptr;
 }
 
 BpHwBinder* IBinder::remoteBinder()
 {
-    return NULL;
+    return nullptr;
 }
 
 bool IBinder::checkSubclass(const void* /*subclassID*/) const
@@ -90,7 +90,7 @@ status_t BHwBinder::transact(
             err = onTransact(code, data, reply, flags,
                     [&](auto &replyParcel) {
                         replyParcel.setDataPosition(0);
-                        if (callback != NULL) {
+                        if (callback != nullptr) {
                             callback(replyParcel);
                         }
                     });
@@ -129,7 +129,7 @@ void BHwBinder::attachObject(
             delete e;
             e = expected;  // Filled in by CAS
         }
-        if (e == 0) return; // out of memory
+        if (e == nullptr) return; // out of memory
     }
 
     AutoMutex _l(e->mLock);
@@ -139,7 +139,7 @@ void BHwBinder::attachObject(
 void* BHwBinder::findObject(const void* objectID) const
 {
     Extras* e = mExtras.load(std::memory_order_acquire);
-    if (!e) return NULL;
+    if (!e) return nullptr;
 
     AutoMutex _l(e->mLock);
     return e->mObjects.find(objectID);
@@ -183,7 +183,7 @@ enum {
 };
 
 BpHwRefBase::BpHwRefBase(const sp<IBinder>& o)
-    : mRemote(o.get()), mRefs(NULL), mState(0)
+    : mRemote(o.get()), mRefs(nullptr), mState(0)
 {
     if (mRemote) {
         mRemote->incStrong(this);           // Removed on first IncStrong().
