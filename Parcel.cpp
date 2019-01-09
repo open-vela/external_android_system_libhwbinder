@@ -219,9 +219,6 @@ status_t flatten_binder(const sp<ProcessState>& /*proc*/,
             obj.flags = priority & FLAT_BINDER_FLAG_PRIORITY_MASK;
             obj.flags |= FLAT_BINDER_FLAG_ACCEPTS_FDS | FLAT_BINDER_FLAG_INHERIT_RT;
             obj.flags |= (policy & 3) << FLAT_BINDER_FLAG_SCHEDPOLICY_SHIFT;
-            if (local->isRequestingSid()) {
-                obj.flags |= FLAT_BINDER_FLAG_TXN_SECURITY_CTX;
-            }
             obj.hdr.type = BINDER_TYPE_BINDER;
             obj.binder = reinterpret_cast<uintptr_t>(local->getWeakRefs());
             obj.cookie = reinterpret_cast<uintptr_t>(local);
