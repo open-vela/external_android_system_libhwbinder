@@ -12,18 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-subdirs = [
-    "vts/performance",
-]
-
-cc_defaults {
-    name: "libhwbinder_defaults",
+cc_library_shared {
+    name: "libhwbinder",
     shared_libs: [
         "libbase",
         "liblog",
         "libcutils",
         "libutils",
-        "libbinderthreadstate",
     ],
     export_shared_lib_headers: [
         "libbase",
@@ -32,12 +27,7 @@ cc_defaults {
     export_include_dirs: ["include"],
     include_dirs: ["frameworks/native/include"],
 
-    recovery_available: true,
     vendor_available: true,
-    vndk: {
-        enabled: true,
-        support_system_process: true,
-    },
     clang: true,
     sanitize: {
         misc_undefined: ["integer"],
@@ -61,50 +51,5 @@ cc_defaults {
         },
     },
 
-    cflags: [
-        "-Wall",
-        "-Werror",
-    ],
-}
-
-cc_library {
-    name: "libhwbinder",
-    defaults: [
-        "libhwbinder_defaults",
-        "hwbinder_pgo",
-        "hwbinder_lto",
-    ],
-}
-
-// Explicitly provide a no lto, no PGO variant, to workaround the issue that we
-// can't detect non-lto users of the module in Android.mk.
-// http://b/77320844
-cc_library {
-    name: "libhwbinder_noltopgo",
-    defaults: [
-        "libhwbinder_defaults",
-    ],
-}
-
-// Provide pgo property to build hwbinder with PGO
-cc_defaults {
-    name: "hwbinder_pgo",
-    pgo: {
-        instrumentation: true,
-        profile_file: "hwbinder/hwbinder.profdata",
-        benchmarks: ["hwbinder"],
-        enable_profile_use: true,
-    },
-}
-
-// Provide lto property to build hwbinder with LTO
-cc_defaults {
-    name: "hwbinder_lto",
-    target: {
-        android: {
-            lto: {
-                thin: true,
-            },
-        },
-    },
+    cflags: ["-Werror"],
 }
