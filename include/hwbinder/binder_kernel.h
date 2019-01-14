@@ -34,7 +34,6 @@ enum {
         FLAT_BINDER_FLAG_SCHEDPOLICY_MASK = 0x600,
         FLAT_BINDER_FLAG_SCHEDPOLICY_SHIFT = 9,
         FLAT_BINDER_FLAG_INHERIT_RT = 0x800,
-        FLAT_BINDER_FLAG_TXN_SECURITY_CTX = 0x1000,
 };
 
 struct binder_node_info_for_ref {
@@ -47,17 +46,5 @@ struct binder_node_info_for_ref {
 };
 
 #define BINDER_GET_NODE_INFO_FOR_REF	_IOWR('b', 12, struct binder_node_info_for_ref)
-#define BINDER_SET_CONTEXT_MGR_EXT      _IOW('b', 13, struct flat_binder_object)
-
-struct binder_transaction_data_secctx {
-        struct binder_transaction_data transaction_data;
-        binder_uintptr_t secctx;
-};
-
-enum {
-        BR_TRANSACTION_SEC_CTX = _IOR('r', 2,
-                              struct binder_transaction_data_secctx),
-};
-
 
 #endif // ANDROID_HARDWARE_BINDER_KERNEL_H
