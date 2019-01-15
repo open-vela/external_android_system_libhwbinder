@@ -37,16 +37,6 @@ enum {
         FLAT_BINDER_FLAG_TXN_SECURITY_CTX = 0x1000,
 };
 
-struct binder_node_info_for_ref {
-        __u32            handle;
-        __u32            strong_count;
-        __u32            weak_count;
-        __u32            reserved1;
-        __u32            reserved2;
-        __u32            reserved3;
-};
-
-#define BINDER_GET_NODE_INFO_FOR_REF	_IOWR('b', 12, struct binder_node_info_for_ref)
 #define BINDER_SET_CONTEXT_MGR_EXT      _IOW('b', 13, struct flat_binder_object)
 
 struct binder_transaction_data_secctx {
