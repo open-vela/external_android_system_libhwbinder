@@ -36,5 +36,4 @@ enum {
         FLAT_BINDER_FLAG_INHERIT_RT = 0x800,
 };
 
-
 #endif // ANDROID_HARDWARE_BINDER_KERNEL_H
