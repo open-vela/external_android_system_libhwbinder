@@ -1135,7 +1135,7 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
             binder_transaction_data_secctx tr_secctx;
             binder_transaction_data& tr = tr_secctx.transaction_data;
 
-            if (cmd == (int) BR_TRANSACTION_SEC_CTX) {
+            if (cmd == BR_TRANSACTION_SEC_CTX) {
                 result = mIn.read(&tr_secctx, sizeof(tr_secctx));
             } else {
                 result = mIn.read(&tr, sizeof(tr));
