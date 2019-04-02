@@ -102,7 +102,7 @@ void BHwBinder::setRequestingSid(bool requestingSid) {
         if (!e) return; // out of memory
     }
 
-    e->mRequestingSid = requestingSid;
+    e->mRequestingSid = true;
 }
 
 status_t BHwBinder::transact(
