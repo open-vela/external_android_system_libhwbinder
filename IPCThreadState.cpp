@@ -773,6 +773,7 @@ status_t IPCThreadState::clearDeathNotification(int32_t handle, BpHwBinder* prox
 
 IPCThreadState::IPCThreadState()
     : mProcess(ProcessState::self()),
+      mMyThreadId(gettid()),
       mStrictModePolicy(0),
       mLastTransactionBinderFlags(0),
       mIsLooper(false),
@@ -783,6 +784,8 @@ IPCThreadState::IPCThreadState()
     mIn.setDataCapacity(256);
     mOut.setDataCapacity(256);
 
+    // TODO(b/67742352): remove this variable from the class
+    (void)mMyThreadId;
     mIPCThreadStateBase = IPCThreadStateBase::self();
 }
 

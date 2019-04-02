@@ -91,7 +91,7 @@ private:
 class BpHwRefBase : public virtual RefBase
 {
 protected:
-    explicit                BpHwRefBase(const sp<IBinder>& o);
+                            BpHwRefBase(const sp<IBinder>& o);
     virtual                 ~BpHwRefBase();
     virtual void            onFirstRef();
     virtual void            onLastStrongRef(const void* id);
