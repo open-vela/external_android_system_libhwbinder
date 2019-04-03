@@ -174,7 +174,6 @@ public:
             uid_t               mCallingUid;
             int32_t             mStrictModePolicy;
             int32_t             mLastTransactionBinderFlags;
-            sp<BHwBinder>         mContextObject;
             bool                mIsLooper;
             bool mIsPollingThread;
 
