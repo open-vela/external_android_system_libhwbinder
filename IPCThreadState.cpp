@@ -1031,9 +1031,11 @@ status_t IPCThreadState::writeTransactionData(int32_t cmd, uint32_t binderFlags,
     return NO_ERROR;
 }
 
+sp<BHwBinder> the_context_object;
+
 void IPCThreadState::setTheContextObject(sp<BHwBinder> obj)
 {
-    mContextObject = obj;
+    the_context_object = obj;
 }
 
 bool IPCThreadState::isLooperThread()
@@ -1210,7 +1212,7 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
                 }
 
             } else {
-                error = mContextObject->transact(tr.code, buffer, &reply, tr.flags, reply_callback);
+                error = the_context_object->transact(tr.code, buffer, &reply, tr.flags, reply_callback);
             }
 
             mIPCThreadStateBase->popCurrentState();
