@@ -736,7 +736,7 @@ status_t IPCThreadState::attemptIncStrongHandle(int32_t handle)
     waitForResponse(nullptr, &result);
 
 #if LOG_REFCOUNTS
-    ALOGV("IPCThreadState::attemptIncStrongHandle(%ld) = %s\n",
+    printf("IPCThreadState::attemptIncStrongHandle(%ld) = %s\n",
         handle, result == NO_ERROR ? "SUCCESS" : "FAILURE");
 #endif
 
@@ -751,7 +751,7 @@ status_t IPCThreadState::attemptIncStrongHandle(int32_t handle)
 void IPCThreadState::expungeHandle(int32_t handle, IBinder* binder)
 {
 #if LOG_REFCOUNTS
-    ALOGV("IPCThreadState::expungeHandle(%ld)\n", handle);
+    printf("IPCThreadState::expungeHandle(%ld)\n", handle);
 #endif
     self()->mProcess->expungeHandle(handle, binder);  // NOLINT
 }
@@ -1276,7 +1276,7 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
         break;
 
     default:
-        ALOGE("*** BAD COMMAND %d received from Binder driver\n", cmd);
+        printf("*** BAD COMMAND %d received from Binder driver\n", cmd);
         result = UNKNOWN_ERROR;
         break;
     }
