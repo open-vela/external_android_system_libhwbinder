@@ -15,7 +15,6 @@
  */
 
 #include <hwbinder/Debug.h>
-#include <hwbinder/ProcessState.h>
 
 #include <utils/misc.h>
 
@@ -222,11 +221,7 @@ void printHexData(int32_t indent, const void *buf, size_t length,
 
         for (word = 0; word < bytesPerLine; ) {
 
-            size_t align_offset = alignment-(alignment?1:0);
-            if (remain > 0 && (size_t)remain <= align_offset) {
-                align_offset = remain - 1;
-            }
-            const size_t startIndex = word+align_offset;
+            const size_t startIndex = word+(alignment-(alignment?1:0));
 
             for (index = 0; index < alignment || (alignment == 0 && index < bytesPerLine); index++) {
 
@@ -298,15 +293,6 @@ void printHexData(int32_t indent, const void *buf, size_t length,
         if (indent > 0) func(cookie, stringForIndent(indent-1));
         func(cookie, "};");
     }
-}
-
-ssize_t getHWBinderKernelReferences(size_t count, uintptr_t* buf) {
-    sp<ProcessState> proc = ProcessState::selfOrNull();
-    if (proc.get() == NULL) {
-        return 0;
-    }
-
-    return proc->getKernelReferences(count, buf);
 }
 
 }; // namespace hardware

@@ -219,8 +219,11 @@ enum {
 BpHwRefBase::BpHwRefBase(const sp<IBinder>& o)
     : mRemote(o.get()), mRefs(NULL), mState(0)
 {
+    extendObjectLifetime(OBJECT_LIFETIME_WEAK);
+
     if (mRemote) {
         mRemote->incStrong(this);           // Removed on first IncStrong().
+        mRefs = mRemote->createWeak(this);  // Held for our entire lifetime.
     }
 }
 
@@ -230,6 +233,7 @@ BpHwRefBase::~BpHwRefBase()
         if (!(mState.load(std::memory_order_relaxed)&kRemoteAcquired)) {
             mRemote->decStrong(this);
         }
+        mRefs->decWeak(this);
     }
 }
 
@@ -247,7 +251,7 @@ void BpHwRefBase::onLastStrongRef(const void* /*id*/)
 
 bool BpHwRefBase::onIncStrongAttempted(uint32_t /*flags*/, const void* /*id*/)
 {
-    return false;
+    return mRemote ? mRefs->attemptIncStrong(this) : false;
 }
 
 // ---------------------------------------------------------------------------

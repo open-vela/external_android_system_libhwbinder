@@ -73,7 +73,7 @@ TextOutput& aerr(gStderrTextOutput);
 
 // ------------ ProcessState.cpp
 
-Mutex& gProcessMutex = *new Mutex;
+Mutex gProcessMutex;
 sp<ProcessState> gProcess;
 
 class LibHwbinderIPCtStatics
