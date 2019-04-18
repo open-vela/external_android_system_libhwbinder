@@ -412,15 +412,6 @@ void IPCThreadState::flushCommands()
     if (mProcess->mDriverFD <= 0)
         return;
     talkWithDriver(false);
-    // The flush could have caused post-write refcount decrements to have
-    // been executed, which in turn could result in BC_RELEASE/BC_DECREFS
-    // being queued in mOut. So flush again, if we need to.
-    if (mOut.dataSize() > 0) {
-        talkWithDriver(false);
-    }
-    if (mOut.dataSize() > 0) {
-        ALOGW("mOut.dataSize() > 0 after flushCommands()");
-    }
 }
 
 void IPCThreadState::blockUntilThreadAvailable()
@@ -453,7 +444,7 @@ status_t IPCThreadState::getAndExecuteCommand()
         pthread_mutex_lock(&mProcess->mThreadCountLock);
         mProcess->mExecutingThreadsCount++;
         if (mProcess->mExecutingThreadsCount >= mProcess->mMaxThreads &&
-            mProcess->mMaxThreads > 1 && mProcess->mStarvationStartTimeMs == 0) {
+                mProcess->mStarvationStartTimeMs == 0) {
             mProcess->mStarvationStartTimeMs = uptimeMillis();
         }
         pthread_mutex_unlock(&mProcess->mThreadCountLock);
@@ -463,14 +454,11 @@ status_t IPCThreadState::getAndExecuteCommand()
         pthread_mutex_lock(&mProcess->mThreadCountLock);
         mProcess->mExecutingThreadsCount--;
         if (mProcess->mExecutingThreadsCount < mProcess->mMaxThreads &&
-            mProcess->mStarvationStartTimeMs != 0) {
+                mProcess->mStarvationStartTimeMs != 0) {
             int64_t starvationTimeMs = uptimeMillis() - mProcess->mStarvationStartTimeMs;
             if (starvationTimeMs > 100) {
-                // If there is only a single-threaded client, nobody would be blocked
-                // on this, and it's not really starvation. (see b/37647467)
-                ALOGW("All binder threads in pool (%zu threads) busy for %" PRId64 " ms%s",
-                      mProcess->mMaxThreads, starvationTimeMs,
-                      mProcess->mMaxThreads > 1 ? "" : " (may be a false alarm)");
+                ALOGE("binder thread pool (%zu threads) starved for %" PRId64 " ms",
+                      mProcess->mMaxThreads, starvationTimeMs);
             }
             mProcess->mStarvationStartTimeMs = 0;
         }
@@ -485,55 +473,23 @@ status_t IPCThreadState::getAndExecuteCommand()
 void IPCThreadState::processPendingDerefs()
 {
     if (mIn.dataPosition() >= mIn.dataSize()) {
-        /*
-         * The decWeak()/decStrong() calls may cause a destructor to run,
-         * which in turn could have initiated an outgoing transaction,
-         * which in turn could cause us to add to the pending refs
-         * vectors; so instead of simply iterating, loop until they're empty.
-         *
-         * We do this in an outer loop, because calling decStrong()
-         * may result in something being added to mPendingWeakDerefs,
-         * which could be delayed until the next incoming command
-         * from the driver if we don't process it now.
-         */
-        while (mPendingWeakDerefs.size() > 0 || mPendingStrongDerefs.size() > 0) {
-            while (mPendingWeakDerefs.size() > 0) {
-                RefBase::weakref_type* refs = mPendingWeakDerefs[0];
-                mPendingWeakDerefs.removeAt(0);
+        size_t numPending = mPendingWeakDerefs.size();
+        if (numPending > 0) {
+            for (size_t i = 0; i < numPending; i++) {
+                RefBase::weakref_type* refs = mPendingWeakDerefs[i];
                 refs->decWeak(mProcess.get());
             }
+            mPendingWeakDerefs.clear();
+        }
 
-            if (mPendingStrongDerefs.size() > 0) {
-                // We don't use while() here because we don't want to re-order
-                // strong and weak decs at all; if this decStrong() causes both a
-                // decWeak() and a decStrong() to be queued, we want to process
-                // the decWeak() first.
-                BHwBinder* obj = mPendingStrongDerefs[0];
-                mPendingStrongDerefs.removeAt(0);
+        numPending = mPendingStrongDerefs.size();
+        if (numPending > 0) {
+            for (size_t i = 0; i < numPending; i++) {
+                BHwBinder* obj = mPendingStrongDerefs[i];
                 obj->decStrong(mProcess.get());
             }
+            mPendingStrongDerefs.clear();
         }
-    }
-}
-
-void IPCThreadState::processPostWriteDerefs()
-{
-    /*
-     * libhwbinder has a flushCommands() in the BpHwBinder destructor,
-     * which makes this function (potentially) reentrant.
-     * New entries shouldn't be added though, so just iterating until empty
-     * should be safe.
-     */
-    while (mPostWriteWeakDerefs.size() > 0) {
-        RefBase::weakref_type* refs = mPostWriteWeakDerefs[0];
-        mPostWriteWeakDerefs.removeAt(0);
-        refs->decWeak(mProcess.get());
-    }
-
-    while (mPostWriteStrongDerefs.size() > 0) {
-        RefBase* obj = mPostWriteStrongDerefs[0];
-        mPostWriteStrongDerefs.removeAt(0);
-        obj->decStrong(mProcess.get());
     }
 }
 
@@ -544,7 +500,6 @@ void IPCThreadState::joinThreadPool(bool isMain)
     mOut.writeInt32(isMain ? BC_ENTER_LOOPER : BC_REGISTER_LOOPER);
 
     status_t result;
-    mIsLooper = true;
     do {
         processPendingDerefs();
         // now get the next command to be processed, waiting if necessary
@@ -567,7 +522,6 @@ void IPCThreadState::joinThreadPool(bool isMain)
         (void*)pthread_self(), getpid(), result);
 
     mOut.writeInt32(BC_EXIT_LOOPER);
-    mIsLooper = false;
     talkWithDriver(false);
 }
 
@@ -576,12 +530,6 @@ int IPCThreadState::setupPolling(int* fd)
     if (mProcess->mDriverFD <= 0) {
         return -EBADF;
     }
-
-    // Tells the kernel to not spawn any additional binder threads,
-    // as that won't work with polling. Also, the caller is responsible
-    // for subsequently calling handlePolledCommands()
-    mProcess->setThreadPoolConfiguration(1, true /* callerWillJoin */);
-    mIsPollingThread = true;
 
     mOut.writeInt32(BC_ENTER_LOOPER);
     *fd = mProcess->mDriverFD;
@@ -615,7 +563,7 @@ status_t IPCThreadState::transact(int32_t handle,
                                   uint32_t code, const Parcel& data,
                                   Parcel* reply, uint32_t flags)
 {
-    status_t err;
+    status_t err = data.errorCheck();
 
     flags |= TF_ACCEPT_FDS;
 
@@ -625,9 +573,11 @@ status_t IPCThreadState::transact(int32_t handle,
             << indent << data << dedent << endl;
     }
 
-    LOG_ONEWAY(">>>> SEND from pid %d uid %d %s", getpid(), getuid(),
-        (flags & TF_ONE_WAY) == 0 ? "READ REPLY" : "ONE WAY");
-    err = writeTransactionData(BC_TRANSACTION_SG, flags, handle, code, data, NULL);
+    if (err == NO_ERROR) {
+        LOG_ONEWAY(">>>> SEND from pid %d uid %d %s", getpid(), getuid(),
+            (flags & TF_ONE_WAY) == 0 ? "READ REPLY" : "ONE WAY");
+        err = writeTransactionData(BC_TRANSACTION_SG, flags, handle, code, data, NULL);
+    }
 
     if (err != NO_ERROR) {
         if (reply) reply->setError(err);
@@ -669,14 +619,11 @@ status_t IPCThreadState::transact(int32_t handle,
     return err;
 }
 
-void IPCThreadState::incStrongHandle(int32_t handle, BpHwBinder *proxy)
+void IPCThreadState::incStrongHandle(int32_t handle)
 {
     LOG_REMOTEREFS("IPCThreadState::incStrongHandle(%d)\n", handle);
     mOut.writeInt32(BC_ACQUIRE);
     mOut.writeInt32(handle);
-    // Create a temp reference until the driver has handled this command.
-    proxy->incStrong(mProcess.get());
-    mPostWriteStrongDerefs.push(proxy);
 }
 
 void IPCThreadState::decStrongHandle(int32_t handle)
@@ -686,14 +633,11 @@ void IPCThreadState::decStrongHandle(int32_t handle)
     mOut.writeInt32(handle);
 }
 
-void IPCThreadState::incWeakHandle(int32_t handle, BpHwBinder *proxy)
+void IPCThreadState::incWeakHandle(int32_t handle)
 {
     LOG_REMOTEREFS("IPCThreadState::incWeakHandle(%d)\n", handle);
     mOut.writeInt32(BC_INCREFS);
     mOut.writeInt32(handle);
-    // Create a temp reference until the driver has handled this command.
-    proxy->getWeakRefs()->incWeak(mProcess.get());
-    mPostWriteWeakDerefs.push(proxy->getWeakRefs());
 }
 
 void IPCThreadState::decWeakHandle(int32_t handle)
@@ -732,7 +676,7 @@ void IPCThreadState::expungeHandle(int32_t handle, IBinder* binder)
 #if LOG_REFCOUNTS
     printf("IPCThreadState::expungeHandle(%ld)\n", handle);
 #endif
-    self()->mProcess->expungeHandle(handle, binder);  // NOLINT
+    self()->mProcess->expungeHandle(handle, binder);
 }
 
 status_t IPCThreadState::requestDeathNotification(int32_t handle, BpHwBinder* proxy)
@@ -755,16 +699,12 @@ IPCThreadState::IPCThreadState()
     : mProcess(ProcessState::self()),
       mMyThreadId(gettid()),
       mStrictModePolicy(0),
-      mLastTransactionBinderFlags(0),
-      mIsLooper(false),
-      mIsPollingThread(false) {
+      mLastTransactionBinderFlags(0)
+{
     pthread_setspecific(gTLS, this);
     clearCaller();
     mIn.setDataCapacity(256);
     mOut.setDataCapacity(256);
-
-    // TODO(b/67742352): remove this variable from the class
-    (void)mMyThreadId;
 }
 
 IPCThreadState::~IPCThreadState()
@@ -949,10 +889,8 @@ status_t IPCThreadState::talkWithDriver(bool doReceive)
         if (bwr.write_consumed > 0) {
             if (bwr.write_consumed < mOut.dataSize())
                 mOut.remove(0, bwr.write_consumed);
-            else {
+            else
                 mOut.setDataSize(0);
-                processPostWriteDerefs();
-            }
         }
         if (bwr.read_consumed > 0) {
             mIn.setDataSize(bwr.read_consumed);
@@ -977,29 +915,28 @@ status_t IPCThreadState::writeTransactionData(int32_t cmd, uint32_t binderFlags,
     int32_t handle, uint32_t code, const Parcel& data, status_t* statusBuffer)
 {
     binder_transaction_data_sg tr_sg;
-    /* Don't pass uninitialized stack data to a remote process */
-    tr_sg.transaction_data.target.ptr = 0;
-    tr_sg.transaction_data.target.handle = handle;
-    tr_sg.transaction_data.code = code;
-    tr_sg.transaction_data.flags = binderFlags;
-    tr_sg.transaction_data.cookie = 0;
-    tr_sg.transaction_data.sender_pid = 0;
-    tr_sg.transaction_data.sender_euid = 0;
+    tr_sg.tr.target.ptr = 0; /* Don't pass uninitialized stack data to a remote process */
+    tr_sg.tr.target.handle = handle;
+    tr_sg.tr.code = code;
+    tr_sg.tr.flags = binderFlags;
+    tr_sg.tr.cookie = 0;
+    tr_sg.tr.sender_pid = 0;
+    tr_sg.tr.sender_euid = 0;
 
     const status_t err = data.errorCheck();
     if (err == NO_ERROR) {
-        tr_sg.transaction_data.data_size = data.ipcDataSize();
-        tr_sg.transaction_data.data.ptr.buffer = data.ipcData();
-        tr_sg.transaction_data.offsets_size = data.ipcObjectsCount()*sizeof(binder_size_t);
-        tr_sg.transaction_data.data.ptr.offsets = data.ipcObjects();
+        tr_sg.tr.data_size = data.ipcDataSize();
+        tr_sg.tr.data.ptr.buffer = data.ipcData();
+        tr_sg.tr.offsets_size = data.ipcObjectsCount()*sizeof(binder_size_t);
+        tr_sg.tr.data.ptr.offsets = data.ipcObjects();
         tr_sg.buffers_size = data.ipcBufferSize();
     } else if (statusBuffer) {
-        tr_sg.transaction_data.flags |= TF_STATUS_CODE;
+        tr_sg.tr.flags |= TF_STATUS_CODE;
         *statusBuffer = err;
-        tr_sg.transaction_data.data_size = sizeof(status_t);
-        tr_sg.transaction_data.data.ptr.buffer = reinterpret_cast<uintptr_t>(statusBuffer);
-        tr_sg.transaction_data.offsets_size = 0;
-        tr_sg.transaction_data.data.ptr.offsets = 0;
+        tr_sg.tr.data_size = sizeof(status_t);
+        tr_sg.tr.data.ptr.buffer = reinterpret_cast<uintptr_t>(statusBuffer);
+        tr_sg.tr.offsets_size = 0;
+        tr_sg.tr.data.ptr.offsets = 0;
         tr_sg.buffers_size = 0;
     } else {
         return (mLastError = err);
@@ -1014,15 +951,6 @@ status_t IPCThreadState::writeTransactionData(int32_t cmd, uint32_t binderFlags,
 void IPCThreadState::setTheContextObject(sp<BHwBinder> obj)
 {
     mContextObject = obj;
-}
-
-bool IPCThreadState::isLooperThread()
-{
-    return mIsLooper;
-}
-
-bool IPCThreadState::isOnlyBinderThread() {
-    return (mIsLooper && mProcess->mMaxThreads <= 1) || mIsPollingThread;
 }
 
 status_t IPCThreadState::executeCommand(int32_t cmd)
