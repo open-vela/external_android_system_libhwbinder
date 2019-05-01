@@ -100,12 +100,17 @@ BpHwBinder::BpHwBinder(int32_t handle)
 }
 
 status_t BpHwBinder::transact(
-    uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags, TransactCallback /*callback*/)
+    uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags, TransactCallback callback)
 {
     // Once a binder has died, it will never come back to life.
     if (mAlive) {
         status_t status = IPCThreadState::self()->transact(
             mHandle, code, data, reply, flags);
+
+        if (status == ::android::OK && callback != nullptr) {
+            callback(*reply);
+        }
+
         if (status == DEAD_OBJECT) mAlive = 0;
         return status;
     }
