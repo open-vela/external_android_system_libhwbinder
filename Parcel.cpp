@@ -467,11 +467,11 @@ status_t Parcel::writeInterfaceToken(const char* interface)
 bool Parcel::enforceInterface(const char* interface) const
 {
     const char* str = readCString();
-    if (strcmp(str, interface) == 0) {
+    if (str != nullptr && strcmp(str, interface) == 0) {
         return true;
     } else {
         ALOGW("**** enforceInterface() expected '%s' but read '%s'",
-                String8(interface).string(), String8(str).string());
+                interface, (str ? str : "<empty string>"));
         return false;
     }
 }
