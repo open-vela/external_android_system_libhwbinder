@@ -65,6 +65,7 @@ public:
     // Parses the RPC header, returning true if the interface name
     // in the header matches the expected interface from the caller.
     bool                enforceInterface(const char* interface) const;
+    bool                checkInterface(IBinder*) const;
 
     void                freeData();
 
