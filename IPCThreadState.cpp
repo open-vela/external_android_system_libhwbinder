@@ -338,6 +338,9 @@ void IPCThreadState::shutdown()
     }
 }
 
+// TODO(b/66905301): remove symbol
+void IPCThreadState::disableBackgroundScheduling(bool /* disable */) {}
+
 sp<ProcessState> IPCThreadState::process()
 {
     return mProcess;
