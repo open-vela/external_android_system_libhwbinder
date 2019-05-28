@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-subdirs = [
-    "vts/performance",
-]
-
 cc_defaults {
     name: "libhwbinder_defaults",
     shared_libs: [
