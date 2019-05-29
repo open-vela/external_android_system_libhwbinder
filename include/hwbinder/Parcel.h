@@ -105,16 +105,6 @@ public:
     status_t            writeEmbeddedBuffer(const void *buffer, size_t length, size_t *handle,
                             size_t parent_buffer_handle, size_t parent_offset);
 public:
-    status_t            writeReference(size_t *handle,
-                                       size_t child_buffer_handle, size_t child_offset);
-    status_t            writeEmbeddedReference(size_t *handle,
-                                               size_t child_buffer_handle, size_t child_offset,
-                                               size_t parent_buffer_handle, size_t parent_offset);
-    status_t            writeNullReference(size_t *handle);
-    status_t            writeEmbeddedNullReference(size_t *handle,
-                                                   size_t parent_buffer_handle, size_t parent_offset);
-
-
     status_t            writeEmbeddedNativeHandle(const native_handle_t *handle,
                             size_t parent_buffer_handle, size_t parent_offset);
     status_t            writeNativeHandleNoDup(const native_handle* handle, bool embedded,
@@ -171,11 +161,6 @@ public:
                                                    size_t parent_offset,
                                                    const void **buffer_out) const;
 
-    status_t            readReference(void const* *bufptr,
-                                      size_t *buffer_handle, bool *isRef) const;
-    status_t            readEmbeddedReference(void const* *bufptr, size_t *buffer_handle,
-                                              size_t parent_buffer_handle, size_t parent_offset,
-                                              bool *isRef) const;
     status_t            readEmbeddedNativeHandle(size_t parent_buffer_handle,
                            size_t parent_offset, const native_handle_t **handle) const;
     status_t            readNullableEmbeddedNativeHandle(size_t parent_buffer_handle,
@@ -240,7 +225,6 @@ public:
                                        ) const;
 
 private:
-    status_t            incrementNumReferences();
     bool                validateBufferChild(size_t child_buffer_handle,
                                             size_t child_offset) const;
     bool                validateBufferParent(size_t parent_buffer_handle,
@@ -298,7 +282,8 @@ private:
     size_t              mObjectsSize;
     size_t              mObjectsCapacity;
     mutable size_t      mNextObjectHint;
-    size_t              mNumRef;
+
+    [[deprecated]] size_t mNumRef;
 
     mutable bool        mFdsKnown;
     mutable bool        mHasFds;

@@ -85,8 +85,6 @@ static size_t gParcelGlobalAllocCount = 0;
 
 static size_t gMaxFds = 0;
 
-static const size_t PARCEL_REF_CAP = 1024;
-
 void acquire_binder_object(const sp<ProcessState>& proc,
     const flat_binder_object& obj, const void* who)
 {
@@ -329,17 +327,6 @@ status_t unflatten_binder(const sp<ProcessState>& proc,
         }
     }
     return BAD_TYPE;
-}
-
-/*
- * Return true iff:
- * 1. obj is indeed a binder_buffer_object (type is BINDER_TYPE_PTR), and
- * 2. obj does NOT have the flag BINDER_BUFFER_FLAG_REF (it is not a reference, but
- *    an actual buffer.)
- */
-static inline bool isBuffer(const binder_buffer_object& obj) {
-    return obj.hdr.type == BINDER_TYPE_PTR
-        && (obj.flags & BINDER_BUFFER_FLAG_REF) == 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -804,9 +791,9 @@ bool Parcel::validateBufferChild(size_t child_buffer_handle,
         return false;
     binder_buffer_object *child = reinterpret_cast<binder_buffer_object*>
             (mData + mObjects[child_buffer_handle]);
-    if (!isBuffer(*child) || child_offset > child->length) {
+    if (child->hdr.type != BINDER_TYPE_PTR || child_offset > child->length) {
         // Parent object not a buffer, or not large enough
-        LOG_BUFFER("writeEmbeddedReference found wierd child. "
+        LOG_BUFFER("writeEmbeddedReference found weird child. "
                    "child_offset = %zu, child->length = %zu",
                    child_offset, (size_t)child->length);
         return false;
@@ -820,7 +807,7 @@ bool Parcel::validateBufferParent(size_t parent_buffer_handle,
         return false;
     binder_buffer_object *parent = reinterpret_cast<binder_buffer_object*>
             (mData + mObjects[parent_buffer_handle]);
-    if (!isBuffer(*parent) ||
+    if (parent->hdr.type != BINDER_TYPE_PTR ||
             sizeof(binder_uintptr_t) > parent->length ||
             parent_offset > parent->length - sizeof(binder_uintptr_t)) {
         // Parent object not a buffer, or not large enough
@@ -868,105 +855,6 @@ status_t Parcel::writeBuffer(const void *buffer, size_t length, size_t *handle)
     return writeObject(obj);
 }
 
-status_t Parcel::incrementNumReferences() {
-    ++mNumRef;
-    LOG_BUFFER("incrementNumReferences: %zu", mNumRef);
-    return mNumRef <= PARCEL_REF_CAP ? OK : NO_MEMORY;
-}
-
-status_t Parcel::writeReference(size_t *handle,
-        size_t child_buffer_handle, size_t child_offset) {
-    LOG_BUFFER("writeReference(child = (%zu, %zu)) -> %zu",
-        child_buffer_handle, child_offset,
-        mObjectsSize);
-    status_t status = incrementNumReferences();
-    if (status != OK)
-        return status;
-    binder_buffer_object obj;
-    obj.hdr.type = BINDER_TYPE_PTR;
-    obj.flags = BINDER_BUFFER_FLAG_REF;
-    if (!validateBufferChild(child_buffer_handle, child_offset))
-        return BAD_VALUE;
-    // The current binder.h does not have child and child_offset names yet.
-    // Use the buffer and length parameters.
-    obj.buffer = child_buffer_handle;
-    obj.length = child_offset;
-    if (handle != nullptr)
-        // We use an index into mObjects as a handle
-        *handle = mObjectsSize;
-    return writeObject(obj);
-}
-
-/* Write an object that describes a pointer from parent to child.
- * Output the handle of that object in the size_t *handle variable. */
-status_t Parcel::writeEmbeddedReference(size_t *handle,
-    size_t child_buffer_handle, size_t child_offset,
-    size_t parent_buffer_handle, size_t parent_offset) {
-    LOG_BUFFER("writeEmbeddedReference(child = (%zu, %zu), parent = (%zu, %zu)) -> %zu",
-        child_buffer_handle, child_offset,
-        parent_buffer_handle, parent_offset,
-        mObjectsSize);
-    status_t status = incrementNumReferences();
-    if (status != OK)
-        return status;
-    binder_buffer_object obj;
-    obj.hdr.type = BINDER_TYPE_PTR;
-    obj.flags = BINDER_BUFFER_FLAG_REF | BINDER_BUFFER_FLAG_HAS_PARENT;
-    if (!validateBufferChild(child_buffer_handle, child_offset))
-        return BAD_VALUE;
-    // The current binder.h does not have child and child_offset names yet.
-    // Use the buffer and length parameters.
-    obj.buffer = child_buffer_handle;
-    obj.length = child_offset;
-    if(!validateBufferParent(parent_buffer_handle, parent_offset))
-        return BAD_VALUE;
-    obj.parent = parent_buffer_handle;
-    obj.parent_offset = parent_offset;
-    if (handle != nullptr) {
-        // We use an index into mObjects as a handle
-        *handle = mObjectsSize;
-    }
-    return writeObject(obj);
-}
-
-status_t Parcel::writeNullReference(size_t * handle) {
-    LOG_BUFFER("writeNullReference -> %zu", mObjectsSize);
-    status_t status = incrementNumReferences();
-    if (status != OK)
-        return status;
-    binder_buffer_object obj;
-    obj.hdr.type = BINDER_TYPE_PTR;
-    obj.flags = BINDER_BUFFER_FLAG_REF;
-    if (handle != nullptr)
-        // We use an index into mObjects as a handle
-        *handle = mObjectsSize;
-    return writeObject(obj);
-}
-
-status_t Parcel::writeEmbeddedNullReference(size_t * handle,
-        size_t parent_buffer_handle, size_t parent_offset) {
-    LOG_BUFFER("writeEmbeddedNullReference(parent = (%zu, %zu)) -> %zu",
-        parent_buffer_handle,
-        parent_offset,
-        mObjectsSize);
-    status_t status = incrementNumReferences();
-    if (status != OK)
-        return status;
-    binder_buffer_object obj;
-    obj.hdr.type = BINDER_TYPE_PTR;
-    obj.flags = BINDER_BUFFER_FLAG_REF | BINDER_BUFFER_FLAG_HAS_PARENT;
-    // parent_buffer_handle and parent_offset needs to be checked.
-    if(!validateBufferParent(parent_buffer_handle, parent_offset))
-        return BAD_VALUE;
-    obj.parent = parent_buffer_handle;
-    obj.parent_offset = parent_offset;
-    if (handle != nullptr) {
-        // We use an index into mObjects as a handle
-        *handle = mObjectsSize;
-    }
-    return writeObject(obj);
-}
-
 void Parcel::clearCache() const {
     LOG_BUFFER("clearing cache.");
     mBufCachePos = 0;
@@ -981,7 +869,7 @@ void Parcel::updateCache() const {
         binder_size_t dataPos = mObjects[i];
         binder_buffer_object *obj =
             reinterpret_cast<binder_buffer_object*>(mData+dataPos);
-        if(!isBuffer(*obj))
+        if(obj->hdr.type != BINDER_TYPE_PTR)
             continue;
         BufferInfo ifo;
         ifo.index = i;
@@ -1562,7 +1450,7 @@ status_t Parcel::readBuffer(size_t buffer_size, size_t *buffer_handle,
 
     const binder_buffer_object* buffer_obj = readObject<binder_buffer_object>(buffer_handle);
 
-    if (buffer_obj == nullptr || !isBuffer(*buffer_obj)) {
+    if (buffer_obj == nullptr || buffer_obj->hdr.type != BINDER_TYPE_PTR) {
         return BAD_VALUE;
     }
 
@@ -1618,48 +1506,6 @@ status_t Parcel::readNullableEmbeddedBuffer(size_t buffer_size,
 {
     return readBuffer(buffer_size, buffer_handle, BINDER_BUFFER_FLAG_HAS_PARENT,
                       parent_buffer_handle, parent_offset, buffer_out);
-}
-
-// isRef if corresponds to a writeReference call, else corresponds to a writeBuffer call.
-// see ::android::hardware::writeReferenceToParcel for details.
-status_t Parcel::readReference(void const* *bufptr,
-                               size_t *buffer_handle, bool *isRef) const
-{
-    LOG_BUFFER("readReference");
-    const binder_buffer_object* buffer_obj = readObject<binder_buffer_object>();
-    LOG_BUFFER("    readReference: buf = %p, len = %zu, flags = %x",
-        (void*)buffer_obj->buffer, (size_t)buffer_obj->length,
-        (int)buffer_obj->flags);
-    // TODO need verification here
-    if (buffer_obj && buffer_obj->hdr.type == BINDER_TYPE_PTR) {
-        if (buffer_handle != nullptr) {
-            *buffer_handle = 0; // TODO fix this, as readBuffer would do
-        }
-        if(isRef != nullptr) {
-            *isRef = (buffer_obj->flags & BINDER_BUFFER_FLAG_REF) != 0;
-            LOG_BUFFER("    readReference: isRef = %d", *isRef);
-        }
-        // in read side, always use .buffer and .length.
-        if(bufptr != nullptr) {
-            *bufptr = (void*)buffer_obj->buffer;
-        }
-        return OK;
-    }
-
-    return BAD_VALUE;
-}
-
-// isRef if corresponds to a writeEmbeddedReference call, else corresponds to a writeEmbeddedBuffer call.
-// see ::android::hardware::writeEmbeddedReferenceToParcel for details.
-status_t Parcel::readEmbeddedReference(void const* *bufptr,
-                                       size_t *buffer_handle,
-                                       size_t /* parent_buffer_handle */,
-                                       size_t /* parent_offset */,
-                                       bool *isRef) const
-{
-    // TODO verify parent and offset
-    LOG_BUFFER("readEmbeddedReference");
-    return (readReference(bufptr, buffer_handle, isRef));
 }
 
 status_t Parcel::readEmbeddedNativeHandle(size_t parent_buffer_handle,
@@ -1818,7 +1664,7 @@ size_t Parcel::ipcBufferSize() const
         i--;
         const binder_buffer_object* buffer
             = reinterpret_cast<binder_buffer_object*>(mData+mObjects[i]);
-        if (isBuffer(*buffer)) {
+        if (buffer->hdr.type == BINDER_TYPE_PTR) {
             /* The binder kernel driver requires each buffer to be 8-byte
              * aligned */
             size_t alignedSize = (buffer->length + (BUFFER_ALIGNMENT_BYTES - 1))
@@ -1848,7 +1694,6 @@ void Parcel::ipcSetDataReference(const uint8_t* data, size_t dataSize,
     mObjectsSize = mObjectsCapacity = objectsCount;
     mNextObjectHint = 0;
     clearCache();
-    mNumRef = 0;
     mOwner = relFunc;
     mOwnerCookie = relCookie;
     for (size_t i = 0; i < mObjectsSize; i++) {
@@ -1882,14 +1727,10 @@ void Parcel::print(TextOutput& to, uint32_t /*flags*/) const
             if (flat->hdr.type == BINDER_TYPE_PTR) {
                 const binder_buffer_object* buffer
                     = reinterpret_cast<const binder_buffer_object*>(DATA+OBJS[i]);
-                if(isBuffer(*buffer)) {
-                    HexDump bufferDump((const uint8_t*)buffer->buffer, (size_t)buffer->length);
-                    bufferDump.setSingleLineCutoff(0);
-                    to << endl << "Object #" << i << " @ " << (void*)OBJS[i] << " (buffer size " << buffer->length << "):";
-                    to << indent << bufferDump << dedent;
-                } else {
-                    to << endl << "Object #" << i << " @ " << (void*)OBJS[i];
-                }
+                HexDump bufferDump((const uint8_t*)buffer->buffer, (size_t)buffer->length);
+                bufferDump.setSingleLineCutoff(0);
+                to << endl << "Object #" << i << " @ " << (void*)OBJS[i] << " (buffer size " << buffer->length << "):";
+                to << indent << bufferDump << dedent;
             } else {
                 to << endl << "Object #" << i << " @ " << (void*)OBJS[i] << ": "
                     << TypeCode(flat->hdr.type & 0x7f7f7f00)
@@ -2022,7 +1863,6 @@ status_t Parcel::restartWrite(size_t desired)
     mNextObjectHint = 0;
     mHasFds = false;
     clearCache();
-    mNumRef = 0;
     mFdsKnown = true;
     mAllowFds = true;
 
@@ -2209,7 +2049,6 @@ void Parcel::initState()
     mAllowFds = true;
     mOwner = nullptr;
     clearCache();
-    mNumRef = 0;
 
     // racing multiple init leads only to multiple identical write
     if (gMaxFds == 0) {
