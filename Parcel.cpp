@@ -882,16 +882,15 @@ status_t Parcel::writeReference(size_t *handle,
     status_t status = incrementNumReferences();
     if (status != OK)
         return status;
+    binder_buffer_object obj;
+    obj.hdr.type = BINDER_TYPE_PTR;
+    obj.flags = BINDER_BUFFER_FLAG_REF;
     if (!validateBufferChild(child_buffer_handle, child_offset))
         return BAD_VALUE;
-    binder_buffer_object obj {
-        .hdr = { .type = BINDER_TYPE_PTR },
-        .flags = BINDER_BUFFER_FLAG_REF,
-        // The current binder.h does not have child and child_offset names yet.
-        // Use the buffer and length parameters.
-        .buffer = child_buffer_handle,
-        .length = child_offset,
-    };
+    // The current binder.h does not have child and child_offset names yet.
+    // Use the buffer and length parameters.
+    obj.buffer = child_buffer_handle;
+    obj.length = child_offset;
     if (handle != nullptr)
         // We use an index into mObjects as a handle
         *handle = mObjectsSize;
@@ -910,20 +909,19 @@ status_t Parcel::writeEmbeddedReference(size_t *handle,
     status_t status = incrementNumReferences();
     if (status != OK)
         return status;
-    // The current binder.h does not have child and child_offset names yet.
-    // Use the buffer and length parameters.
+    binder_buffer_object obj;
+    obj.hdr.type = BINDER_TYPE_PTR;
+    obj.flags = BINDER_BUFFER_FLAG_REF | BINDER_BUFFER_FLAG_HAS_PARENT;
     if (!validateBufferChild(child_buffer_handle, child_offset))
         return BAD_VALUE;
+    // The current binder.h does not have child and child_offset names yet.
+    // Use the buffer and length parameters.
+    obj.buffer = child_buffer_handle;
+    obj.length = child_offset;
     if(!validateBufferParent(parent_buffer_handle, parent_offset))
         return BAD_VALUE;
-    binder_buffer_object obj {
-        .hdr = { .type = BINDER_TYPE_PTR },
-        .flags = BINDER_BUFFER_FLAG_REF | BINDER_BUFFER_FLAG_HAS_PARENT,
-        .buffer = child_buffer_handle,
-        .length = child_offset,
-        .parent = parent_buffer_handle,
-        .parent_offset = parent_offset,
-    };
+    obj.parent = parent_buffer_handle;
+    obj.parent_offset = parent_offset;
     if (handle != nullptr) {
         // We use an index into mObjects as a handle
         *handle = mObjectsSize;
@@ -936,12 +934,9 @@ status_t Parcel::writeNullReference(size_t * handle) {
     status_t status = incrementNumReferences();
     if (status != OK)
         return status;
-
-    binder_buffer_object obj {
-        .hdr = { .type = BINDER_TYPE_PTR },
-        .flags = BINDER_BUFFER_FLAG_REF,
-    };
-
+    binder_buffer_object obj;
+    obj.hdr.type = BINDER_TYPE_PTR;
+    obj.flags = BINDER_BUFFER_FLAG_REF;
     if (handle != nullptr)
         // We use an index into mObjects as a handle
         *handle = mObjectsSize;
@@ -957,14 +952,14 @@ status_t Parcel::writeEmbeddedNullReference(size_t * handle,
     status_t status = incrementNumReferences();
     if (status != OK)
         return status;
+    binder_buffer_object obj;
+    obj.hdr.type = BINDER_TYPE_PTR;
+    obj.flags = BINDER_BUFFER_FLAG_REF | BINDER_BUFFER_FLAG_HAS_PARENT;
+    // parent_buffer_handle and parent_offset needs to be checked.
     if(!validateBufferParent(parent_buffer_handle, parent_offset))
         return BAD_VALUE;
-    binder_buffer_object obj {
-        .hdr = { .type = BINDER_TYPE_PTR, },
-        .flags = BINDER_BUFFER_FLAG_REF | BINDER_BUFFER_FLAG_HAS_PARENT,
-        .parent = parent_buffer_handle,
-        .parent_offset = parent_offset,
-    };
+    obj.parent = parent_buffer_handle;
+    obj.parent_offset = parent_offset;
     if (handle != nullptr) {
         // We use an index into mObjects as a handle
         *handle = mObjectsSize;
