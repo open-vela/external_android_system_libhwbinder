@@ -27,10 +27,6 @@
  */
 
 enum {
-	BINDER_BUFFER_FLAG_REF          = 1U << 1,
-};
-
-enum {
         FLAT_BINDER_FLAG_SCHEDPOLICY_MASK = 0x600,
         FLAT_BINDER_FLAG_SCHEDPOLICY_SHIFT = 9,
         FLAT_BINDER_FLAG_INHERIT_RT = 0x800,
