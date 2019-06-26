@@ -59,6 +59,8 @@ cc_benchmark {
     shared_libs: [
         "libbinder",
         "libutils",
+    ],
+    static_libs: [
         "android.hardware.tests.libbinder",
     ],
 }
