@@ -233,6 +233,11 @@ ssize_t ProcessState::getStrongRefCountForNodeByHandle(int32_t handle) {
     status_t result = ioctl(mDriverFD, BINDER_GET_NODE_INFO_FOR_REF, &info);
 
     if (result != OK) {
+        static bool logged = false;
+        if (!logged) {
+          ALOGW("Kernel does not support BINDER_GET_NODE_INFO_FOR_REF.");
+          logged = true;
+        }
         return -1;
     }
 
