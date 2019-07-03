@@ -781,10 +781,6 @@ template status_t Parcel::writeObject<binder_fd_object>(const binder_fd_object& 
 template status_t Parcel::writeObject<binder_buffer_object>(const binder_buffer_object& val);
 template status_t Parcel::writeObject<binder_fd_array_object>(const binder_fd_array_object& val);
 
-
-// TODO merge duplicated code in writeEmbeddedBuffer, writeEmbeddedReference, and writeEmbeddedNullReference
-// TODO merge duplicated code in writeBuffer, writeReference, and writeNullReference
-
 bool Parcel::validateBufferChild(size_t child_buffer_handle,
                                  size_t child_offset) const {
     if (child_buffer_handle >= mObjectsSize)
