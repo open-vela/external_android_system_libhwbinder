@@ -62,7 +62,7 @@ void BpHwBinder::ObjectManager::attach(
 void* BpHwBinder::ObjectManager::find(const void* objectID) const
 {
     const ssize_t i = mObjects.indexOfKey(objectID);
-    if (i < 0) return nullptr;
+    if (i < 0) return NULL;
     return mObjects.valueAt(i).object;
 }
 
@@ -77,7 +77,7 @@ void BpHwBinder::ObjectManager::kill()
     ALOGV("Killing %zu objects in manager %p", N, this);
     for (size_t i=0; i<N; i++) {
         const entry_t& e = mObjects.valueAt(i);
-        if (e.func != nullptr) {
+        if (e.func != NULL) {
             e.func(mObjects.keyAt(i), e.object, e.cleanupCookie);
         }
     }
@@ -91,7 +91,7 @@ BpHwBinder::BpHwBinder(int32_t handle)
     : mHandle(handle)
     , mAlive(1)
     , mObitsSent(0)
-    , mObituaries(nullptr)
+    , mObituaries(NULL)
 {
     ALOGV("Creating BpHwBinder %p handle %d\n", this, mHandle);
 
@@ -100,17 +100,12 @@ BpHwBinder::BpHwBinder(int32_t handle)
 }
 
 status_t BpHwBinder::transact(
-    uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags, TransactCallback callback)
+    uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags, TransactCallback /*callback*/)
 {
     // Once a binder has died, it will never come back to life.
     if (mAlive) {
         status_t status = IPCThreadState::self()->transact(
             mHandle, code, data, reply, flags);
-
-        if (status == ::android::OK && callback != nullptr) {
-            callback(*reply);
-        }
-
         if (status == DEAD_OBJECT) mAlive = 0;
         return status;
     }
@@ -126,7 +121,7 @@ status_t BpHwBinder::linkToDeath(
     ob.cookie = cookie;
     ob.flags = flags;
 
-    LOG_ALWAYS_FATAL_IF(recipient == nullptr,
+    LOG_ALWAYS_FATAL_IF(recipient == NULL,
                         "linkToDeath(): recipient must be non-NULL");
 
     {
@@ -166,9 +161,9 @@ status_t BpHwBinder::unlinkToDeath(
     for (size_t i=0; i<N; i++) {
         const Obituary& obit = mObituaries->itemAt(i);
         if ((obit.recipient == recipient
-                    || (recipient == nullptr && obit.cookie == cookie))
+                    || (recipient == NULL && obit.cookie == cookie))
                 && obit.flags == flags) {
-            if (outRecipient != nullptr) {
+            if (outRecipient != NULL) {
                 *outRecipient = mObituaries->itemAt(i).recipient;
             }
             mObituaries->removeAt(i);
@@ -178,7 +173,7 @@ status_t BpHwBinder::unlinkToDeath(
                 self->clearDeathNotification(mHandle, this);
                 self->flushCommands();
                 delete mObituaries;
-                mObituaries = nullptr;
+                mObituaries = NULL;
             }
             return NO_ERROR;
         }
@@ -197,12 +192,12 @@ void BpHwBinder::sendObituary()
 
     mLock.lock();
     Vector<Obituary>* obits = mObituaries;
-    if(obits != nullptr) {
+    if(obits != NULL) {
         ALOGV("Clearing sent death notification: %p handle %d\n", this, mHandle);
         IPCThreadState* self = IPCThreadState::self();
         self->clearDeathNotification(mHandle, this);
         self->flushCommands();
-        mObituaries = nullptr;
+        mObituaries = NULL;
     }
     mObitsSent = 1;
     mLock.unlock();
@@ -210,7 +205,7 @@ void BpHwBinder::sendObituary()
     ALOGV("Reporting death of proxy %p for %zu recipients\n",
         this, obits ? obits->size() : 0U);
 
-    if (obits != nullptr) {
+    if (obits != NULL) {
         const size_t N = obits->size();
         for (size_t i=0; i<N; i++) {
             reportOneDeath(obits->itemAt(i));
@@ -220,18 +215,11 @@ void BpHwBinder::sendObituary()
     }
 }
 
-// Returns the strong refcount on the object this proxy points to, or
-// -1 in case of failure.
-ssize_t BpHwBinder::getNodeStrongRefCount()
-{
-    return ProcessState::self()->getStrongRefCountForNodeByHandle(mHandle);
-}
-
 void BpHwBinder::reportOneDeath(const Obituary& obit)
 {
     sp<DeathRecipient> recipient = obit.recipient.promote();
     ALOGV("Reporting death to recipient: %p\n", recipient.get());
-    if (recipient == nullptr) return;
+    if (recipient == NULL) return;
 
     recipient->binderDied(this);
 }
@@ -271,13 +259,13 @@ BpHwBinder::~BpHwBinder()
 
     mLock.lock();
     Vector<Obituary>* obits = mObituaries;
-    if(obits != nullptr) {
+    if(obits != NULL) {
         if (ipc) ipc->clearDeathNotification(mHandle, this);
-        mObituaries = nullptr;
+        mObituaries = NULL;
     }
     mLock.unlock();
 
-    if (obits != nullptr) {
+    if (obits != NULL) {
         // XXX Should we tell any remaining DeathRecipient
         // objects that the last strong ref has gone away, so they
         // are no longer linked?
