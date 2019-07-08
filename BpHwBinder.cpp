@@ -269,21 +269,6 @@ BpHwBinder::~BpHwBinder()
 
     IPCThreadState* ipc = IPCThreadState::self();
 
-    mLock.lock();
-    Vector<Obituary>* obits = mObituaries;
-    if(obits != nullptr) {
-        if (ipc) ipc->clearDeathNotification(mHandle, this);
-        mObituaries = nullptr;
-    }
-    mLock.unlock();
-
-    if (obits != nullptr) {
-        // XXX Should we tell any remaining DeathRecipient
-        // objects that the last strong ref has gone away, so they
-        // are no longer linked?
-        delete obits;
-    }
-
     if (ipc) {
         ipc->expungeHandle(mHandle, this);
         ipc->decWeakHandle(mHandle);
@@ -307,6 +292,26 @@ void BpHwBinder::onLastStrongRef(const void* /*id*/)
     if (ipc) {
         ipc->decStrongHandle(mHandle);
         ipc->flushCommands();
+    }
+
+    mLock.lock();
+    Vector<Obituary>* obits = mObituaries;
+    if(obits != nullptr) {
+        if (!obits->isEmpty()) {
+            ALOGI("onLastStrongRef automatically unlinking death recipients");
+        }
+
+        if (ipc) ipc->clearDeathNotification(mHandle, this);
+        mObituaries = nullptr;
+    }
+    mLock.unlock();
+
+    if (obits != nullptr) {
+        // XXX Should we tell any remaining DeathRecipient
+        // objects that the last strong ref has gone away, so they
+        // are no longer linked?
+        delete obits;
+        obits = nullptr;
     }
 }
 
