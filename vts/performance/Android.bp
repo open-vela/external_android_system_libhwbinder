@@ -22,7 +22,9 @@ cc_defaults {
         "-Werror",
     ],
     shared_libs: [
-        "libhidlbase_pgo",
+        "libhidlbase",
+        "libhidltransport",
+        "libhwbinder",
         "liblog",
         "libutils",
         "libcutils",
