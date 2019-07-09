@@ -454,11 +454,11 @@ status_t Parcel::writeInterfaceToken(const char* interface)
 bool Parcel::enforceInterface(const char* interface) const
 {
     const char* str = readCString();
-    if (str != nullptr && strcmp(str, interface) == 0) {
+    if (strcmp(str, interface) == 0) {
         return true;
     } else {
         ALOGW("**** enforceInterface() expected '%s' but read '%s'",
-                interface, (str ? str : "<empty string>"));
+                String8(interface).string(), String8(str).string());
         return false;
     }
 }
@@ -1203,8 +1203,8 @@ bool Parcel::readBool() const
 
 const char* Parcel::readCString() const
 {
-    if (mDataPos < mDataSize) {
-        const size_t avail = mDataSize-mDataPos;
+    const size_t avail = mDataSize-mDataPos;
+    if (avail > 0) {
         const char* str = reinterpret_cast<const char*>(mData+mDataPos);
         // is the string's trailing NUL within the parcel's valid bounds?
         const char* eos = reinterpret_cast<const char*>(memchr(str, 0, avail));
@@ -1959,16 +1959,10 @@ status_t Parcel::continueWrite(size_t desired)
                 }
                 release_object(proc, *flat, this);
             }
-
-            if (objectsSize == 0) {
-                free(mObjects);
-                mObjects = nullptr;
-            } else {
-                binder_size_t* objects =
-                    (binder_size_t*)realloc(mObjects, objectsSize*sizeof(binder_size_t));
-                if (objects) {
-                    mObjects = objects;
-                }
+            binder_size_t* objects =
+                (binder_size_t*)realloc(mObjects, objectsSize*sizeof(binder_size_t));
+            if (objects) {
+                mObjects = objects;
             }
             mObjectsSize = objectsSize;
             mNextObjectHint = 0;
