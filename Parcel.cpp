@@ -454,11 +454,11 @@ status_t Parcel::writeInterfaceToken(const char* interface)
 bool Parcel::enforceInterface(const char* interface) const
 {
     const char* str = readCString();
-    if (strcmp(str, interface) == 0) {
+    if (str != nullptr && strcmp(str, interface) == 0) {
         return true;
     } else {
         ALOGW("**** enforceInterface() expected '%s' but read '%s'",
-                String8(interface).string(), String8(str).string());
+                interface, (str ? str : "<empty string>"));
         return false;
     }
 }
@@ -1203,8 +1203,8 @@ bool Parcel::readBool() const
 
 const char* Parcel::readCString() const
 {
-    const size_t avail = mDataSize-mDataPos;
-    if (avail > 0) {
+    if (mDataPos < mDataSize) {
+        const size_t avail = mDataSize-mDataPos;
         const char* str = reinterpret_cast<const char*>(mData+mDataPos);
         // is the string's trailing NUL within the parcel's valid bounds?
         const char* eos = reinterpret_cast<const char*>(memchr(str, 0, avail));
