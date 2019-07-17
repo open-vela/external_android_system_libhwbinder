@@ -95,7 +95,6 @@ public:
     status_t            writeString16(const std::unique_ptr<String16>& str);
     status_t            writeString16(const char16_t* str, size_t len);
     status_t            writeStrongBinder(const sp<IBinder>& val);
-    status_t            writeWeakBinder(const wp<IBinder>& val);
     status_t            writeBool(bool val);
 
     template<typename T>
@@ -143,7 +142,6 @@ public:
     sp<IBinder>         readStrongBinder() const;
     status_t            readStrongBinder(sp<IBinder>* val) const;
     status_t            readNullableStrongBinder(sp<IBinder>* val) const;
-    wp<IBinder>         readWeakBinder() const;
 
     template<typename T>
     const T*            readObject(size_t *objects_offset = nullptr) const;

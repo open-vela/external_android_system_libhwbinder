@@ -225,55 +225,6 @@ status_t flatten_binder(const sp<ProcessState>& /*proc*/,
     return finish_flatten_binder(binder, obj, out);
 }
 
-status_t flatten_binder(const sp<ProcessState>& /*proc*/,
-    const wp<IBinder>& binder, Parcel* out)
-{
-    flat_binder_object obj = {};
-
-    obj.flags = 0x7f | FLAT_BINDER_FLAG_ACCEPTS_FDS;
-    if (binder != nullptr) {
-        sp<IBinder> real = binder.promote();
-        if (real != nullptr) {
-            IBinder *local = real->localBinder();
-            if (!local) {
-                BpHwBinder *proxy = real->remoteBinder();
-                if (proxy == nullptr) {
-                    ALOGE("null proxy");
-                }
-                const int32_t handle = proxy ? proxy->handle() : 0;
-                obj.hdr.type = BINDER_TYPE_WEAK_HANDLE;
-                obj.binder = 0; /* Don't pass uninitialized stack data to a remote process */
-                obj.handle = handle;
-                obj.cookie = 0;
-            } else {
-                obj.hdr.type = BINDER_TYPE_WEAK_BINDER;
-                obj.binder = reinterpret_cast<uintptr_t>(binder.get_refs());
-                obj.cookie = reinterpret_cast<uintptr_t>(binder.unsafe_get());
-            }
-            return finish_flatten_binder(real, obj, out);
-        }
-
-        // XXX How to deal?  In order to flatten the given binder,
-        // we need to probe it for information, which requires a primary
-        // reference...  but we don't have one.
-        //
-        // The OpenBinder implementation uses a dynamic_cast<> here,
-        // but we can't do that with the different reference counting
-        // implementation we are using.
-        ALOGE("Unable to unflatten Binder weak reference!");
-        obj.hdr.type = BINDER_TYPE_BINDER;
-        obj.binder = 0;
-        obj.cookie = 0;
-        return finish_flatten_binder(nullptr, obj, out);
-
-    } else {
-        obj.hdr.type = BINDER_TYPE_BINDER;
-        obj.binder = 0;
-        obj.cookie = 0;
-        return finish_flatten_binder(nullptr, obj, out);
-    }
-}
-
 inline static status_t finish_unflatten_binder(
     BpHwBinder* /*proxy*/, const flat_binder_object& /*flat*/,
     const Parcel& /*in*/)
@@ -295,35 +246,6 @@ status_t unflatten_binder(const sp<ProcessState>& proc,
                 *out = proc->getStrongProxyForHandle(flat->handle);
                 return finish_unflatten_binder(
                     static_cast<BpHwBinder*>(out->get()), *flat, in);
-        }
-    }
-    return BAD_TYPE;
-}
-
-status_t unflatten_binder(const sp<ProcessState>& proc,
-    const Parcel& in, wp<IBinder>* out)
-{
-    const flat_binder_object* flat = in.readObject<flat_binder_object>();
-
-    if (flat) {
-        switch (flat->hdr.type) {
-            case BINDER_TYPE_BINDER:
-                *out = reinterpret_cast<IBinder*>(flat->cookie);
-                return finish_unflatten_binder(nullptr, *flat, in);
-            case BINDER_TYPE_WEAK_BINDER:
-                if (flat->binder != 0) {
-                    out->set_object_and_refs(
-                        reinterpret_cast<IBinder*>(flat->cookie),
-                        reinterpret_cast<RefBase::weakref_type*>(flat->binder));
-                } else {
-                    *out = nullptr;
-                }
-                return finish_unflatten_binder(nullptr, *flat, in);
-            case BINDER_TYPE_HANDLE:
-            case BINDER_TYPE_WEAK_HANDLE:
-                *out = proc->getWeakProxyForHandle(flat->handle);
-                return finish_unflatten_binder(
-                    static_cast<BpHwBinder*>(out->unsafe_get()), *flat, in);
         }
     }
     return BAD_TYPE;
@@ -700,11 +622,6 @@ status_t Parcel::writeString16(const char16_t* str, size_t len)
     return err;
 }
 status_t Parcel::writeStrongBinder(const sp<IBinder>& val)
-{
-    return flatten_binder(ProcessState::self(), val, this);
-}
-
-status_t Parcel::writeWeakBinder(const wp<IBinder>& val)
 {
     return flatten_binder(ProcessState::self(), val, this);
 }
@@ -1297,13 +1214,6 @@ sp<IBinder> Parcel::readStrongBinder() const
     // method, and that code has historically been ok with getting nullptr
     // back (while ignoring error codes).
     readNullableStrongBinder(&val);
-    return val;
-}
-
-wp<IBinder> Parcel::readWeakBinder() const
-{
-    wp<IBinder> val;
-    unflatten_binder(ProcessState::self(), *this, &val);
     return val;
 }
 
