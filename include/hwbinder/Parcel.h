@@ -65,6 +65,7 @@ public:
     // Parses the RPC header, returning true if the interface name
     // in the header matches the expected interface from the caller.
     bool                enforceInterface(const char* interface) const;
+    bool                checkInterface(IBinder*) const;
 
     void                freeData();
 
@@ -95,6 +96,7 @@ public:
     status_t            writeString16(const std::unique_ptr<String16>& str);
     status_t            writeString16(const char16_t* str, size_t len);
     status_t            writeStrongBinder(const sp<IBinder>& val);
+    status_t            writeWeakBinder(const wp<IBinder>& val);
     status_t            writeBool(bool val);
 
     template<typename T>
@@ -104,6 +106,16 @@ public:
     status_t            writeEmbeddedBuffer(const void *buffer, size_t length, size_t *handle,
                             size_t parent_buffer_handle, size_t parent_offset);
 public:
+    status_t            writeReference(size_t *handle,
+                                       size_t child_buffer_handle, size_t child_offset);
+    status_t            writeEmbeddedReference(size_t *handle,
+                                               size_t child_buffer_handle, size_t child_offset,
+                                               size_t parent_buffer_handle, size_t parent_offset);
+    status_t            writeNullReference(size_t *handle);
+    status_t            writeEmbeddedNullReference(size_t *handle,
+                                                   size_t parent_buffer_handle, size_t parent_offset);
+
+
     status_t            writeEmbeddedNativeHandle(const native_handle_t *handle,
                             size_t parent_buffer_handle, size_t parent_offset);
     status_t            writeNativeHandleNoDup(const native_handle* handle, bool embedded,
@@ -142,6 +154,7 @@ public:
     sp<IBinder>         readStrongBinder() const;
     status_t            readStrongBinder(sp<IBinder>* val) const;
     status_t            readNullableStrongBinder(sp<IBinder>* val) const;
+    wp<IBinder>         readWeakBinder() const;
 
     template<typename T>
     const T*            readObject(size_t *objects_offset = nullptr) const;
@@ -159,6 +172,11 @@ public:
                                                    size_t parent_offset,
                                                    const void **buffer_out) const;
 
+    status_t            readReference(void const* *bufptr,
+                                      size_t *buffer_handle, bool *isRef) const;
+    status_t            readEmbeddedReference(void const* *bufptr, size_t *buffer_handle,
+                                              size_t parent_buffer_handle, size_t parent_offset,
+                                              bool *isRef) const;
     status_t            readEmbeddedNativeHandle(size_t parent_buffer_handle,
                            size_t parent_offset, const native_handle_t **handle) const;
     status_t            readNullableEmbeddedNativeHandle(size_t parent_buffer_handle,
@@ -223,6 +241,7 @@ public:
                                        ) const;
 
 private:
+    status_t            incrementNumReferences();
     bool                validateBufferChild(size_t child_buffer_handle,
                                             size_t child_offset) const;
     bool                validateBufferParent(size_t parent_buffer_handle,
@@ -280,8 +299,7 @@ private:
     size_t              mObjectsSize;
     size_t              mObjectsCapacity;
     mutable size_t      mNextObjectHint;
-
-    [[deprecated]] size_t mNumRef;
+    size_t              mNumRef;
 
     mutable bool        mFdsKnown;
     mutable bool        mHasFds;
