@@ -99,23 +99,6 @@ cc_library_static {
     vendor_available: true,
 }
 
-// Explicitly provide a no lto, no PGO variant, to workaround the issue that we
-// can't detect non-lto users of the module in Android.mk.
-// TODO(b/135558503): remove
-cc_library {
-    name: "libhwbinder_noltopgo",
-    defaults: [
-        "libhwbinder_defaults",
-        "libhwbinder-impl-shared-libs",
-    ],
-    recovery_available: true,
-    vendor_available: true,
-    vndk: {
-        enabled: true,
-        support_system_process: true,
-    },
-}
-
 // Only libhwbinder_benchmark needs to have pgo enabled. When all places
 // support having PGO selectively enabled, all places can use libhwbinder.
 //
