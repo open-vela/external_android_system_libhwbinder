@@ -36,6 +36,7 @@
 #include <hwbinder/Parcel.h>
 #include <hwbinder/ProcessState.h>
 #include <hwbinder/TextOutput.h>
+#include <hwbinder/binder_kernel.h>
 
 #include <cutils/ashmem.h>
 #include <utils/Debug.h>
@@ -44,7 +45,7 @@
 #include <utils/String8.h>
 #include <utils/String16.h>
 
-#include "binder_kernel.h"
+#include <private/binder/binder_module.h>
 #include <hwbinder/Static.h>
 
 #ifndef INT32_MAX
@@ -1868,16 +1869,10 @@ status_t Parcel::continueWrite(size_t desired)
                 }
                 release_object(proc, *flat, this);
             }
-
-            if (objectsSize == 0) {
-                free(mObjects);
-                mObjects = nullptr;
-            } else {
-                binder_size_t* objects =
-                    (binder_size_t*)realloc(mObjects, objectsSize*sizeof(binder_size_t));
-                if (objects) {
-                    mObjects = objects;
-                }
+            binder_size_t* objects =
+                (binder_size_t*)realloc(mObjects, objectsSize*sizeof(binder_size_t));
+            if (objects) {
+                mObjects = objects;
             }
             mObjectsSize = objectsSize;
             mNextObjectHint = 0;
