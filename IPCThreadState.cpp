@@ -22,6 +22,7 @@
 #include <hwbinder/Binder.h>
 #include <hwbinder/BpHwBinder.h>
 #include <hwbinder/TextOutput.h>
+#include <hwbinder/binder_kernel.h>
 
 #include <android-base/macros.h>
 #include <utils/CallStack.h>
@@ -29,7 +30,7 @@
 #include <utils/SystemClock.h>
 #include <utils/threads.h>
 
-#include "binder_kernel.h"
+#include <private/binder/binder_module.h>
 #include <hwbinder/Static.h>
 
 #include <atomic>
