@@ -36,7 +36,6 @@
 #include <hwbinder/Parcel.h>
 #include <hwbinder/ProcessState.h>
 #include <hwbinder/TextOutput.h>
-#include <hwbinder/binder_kernel.h>
 
 #include <cutils/ashmem.h>
 #include <utils/Debug.h>
@@ -45,7 +44,7 @@
 #include <utils/String8.h>
 #include <utils/String16.h>
 
-#include <private/binder/binder_module.h>
+#include "binder_kernel.h"
 #include <hwbinder/Static.h>
 
 #ifndef INT32_MAX
