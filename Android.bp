@@ -16,7 +16,6 @@ cc_defaults {
     name: "libhwbinder_defaults",
 
     export_include_dirs: ["include"],
-    include_dirs: ["frameworks/native/include"],
 
     sanitize: {
         misc_undefined: ["integer"],
