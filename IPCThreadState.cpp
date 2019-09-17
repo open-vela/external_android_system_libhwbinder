@@ -35,8 +35,8 @@
 #include <atomic>
 #include <errno.h>
 #include <inttypes.h>
+#include <linux/sched.h>
 #include <pthread.h>
-#include <sched.h>
 #include <signal.h>
 #include <stdio.h>
 #include <sys/ioctl.h>

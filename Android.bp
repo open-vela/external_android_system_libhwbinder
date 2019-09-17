@@ -70,6 +70,7 @@ cc_defaults {
 // WARNING: this should no longer be used
 cc_library {
     name: "libhwbinder",
+    host_supported: true,
     recovery_available: true,
     vendor_available: true,
     vndk: {
@@ -84,16 +85,23 @@ cc_library {
 // Used as shared library to provide headers for libhidltransport-impl-internal.
 cc_library_static {
     name: "libhwbinder-impl-internal",
-    // TODO(b/135299443): allow this library to link against vndk-private libs
-    // and instead rely on the fact that users of this static library must be
-    // vndk (since they must use libbinderthreadstate).
-    include_dirs: ["frameworks/native/libs/binderthreadstate/include/"],
+    include_dirs: [
+        // TODO(b/135299443): allow this library to link against vndk-private libs
+        // and instead rely on the fact that users of this static library must be
+        // vndk (since they must use libbinderthreadstate).
+        "frameworks/native/libs/binderthreadstate/include/",
+        // TODO(b/31559095): get headers from bionic on host
+        "bionic/libc/kernel/android/uapi/",
+        "bionic/libc/kernel/uapi/",
+    ],
+
     defaults: [
         "libhwbinder_defaults",
         "libhwbinder-impl-shared-libs-no-vndk-private",
         "hwbinder_pgo",
         "hwbinder_lto",
     ],
+    host_supported: true,
     recovery_available: true,
     vendor_available: true,
 }

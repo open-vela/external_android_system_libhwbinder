@@ -35,11 +35,11 @@ namespace android {
 namespace hardware {
 
 #ifdef BINDER_IPC_32BIT
-typedef __u32 binder_size_t;
-typedef __u32 binder_uintptr_t;
+typedef unsigned int binder_size_t;
+typedef unsigned int binder_uintptr_t;
 #else
-typedef __u64 binder_size_t;
-typedef __u64 binder_uintptr_t;
+typedef unsigned long long binder_size_t;
+typedef unsigned long long binder_uintptr_t;
 #endif
 
 class IBinder;
