@@ -17,6 +17,11 @@
 #ifndef ANDROID_HARDWARE_BINDER_KERNEL_H
 #define ANDROID_HARDWARE_BINDER_KERNEL_H
 
+// TODO(b/31559095): bionic on host
+#ifndef __ANDROID__
+#define __packed __attribute__((__packed__))
+#endif
+
 #include <linux/android/binder.h>
 
 /**

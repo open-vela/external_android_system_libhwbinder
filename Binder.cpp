@@ -22,7 +22,7 @@
 #include <hwbinder/IInterface.h>
 #include <hwbinder/Parcel.h>
 
-#include <sched.h>
+#include <linux/sched.h>
 #include <stdio.h>
 
 namespace android {
