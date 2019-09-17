@@ -21,12 +21,11 @@
 #include <cutils/atomic.h>
 #include <hwbinder/BpHwBinder.h>
 #include <hwbinder/IPCThreadState.h>
-#include <hwbinder/binder_kernel.h>
 #include <utils/Log.h>
 #include <utils/String8.h>
 #include <utils/threads.h>
 
-#include <private/binder/binder_module.h>
+#include "binder_kernel.h"
 #include <hwbinder/Static.h>
 
 #include <errno.h>
