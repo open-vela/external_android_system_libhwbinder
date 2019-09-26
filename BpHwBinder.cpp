@@ -324,5 +324,5 @@ bool BpHwBinder::onIncStrongAttempted(uint32_t /*flags*/, const void* /*id*/)
 
 // ---------------------------------------------------------------------------
 
-}; // namespace hardware
-}; // namespace android
+} // namespace hardware
+} // namespace android

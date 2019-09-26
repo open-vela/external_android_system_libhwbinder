@@ -118,8 +118,8 @@ private:
     mutable String16            mDescriptorCache;
 };
 
-}; // namespace hardware
-}; // namespace android
+} // namespace hardware
+} // namespace android
 
 // ---------------------------------------------------------------------------
 

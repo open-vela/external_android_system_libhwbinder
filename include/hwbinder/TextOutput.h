@@ -200,7 +200,7 @@ inline size_t HexDump::alignment() const { return mAlignment; }
 inline bool HexDump::carrayStyle() const { return mCArrayStyle; }
 
 // ---------------------------------------------------------------------------
-}; // namespace hardware
-}; // namespace android
+} // namespace hardware
+} // namespace android
 
 #endif // ANDROID_HARDWARE_TEXTOUTPUT_H
