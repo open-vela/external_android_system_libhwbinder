@@ -322,8 +322,8 @@ status_t unflatten_binder(const sp<ProcessState>& proc,
 status_t unflatten_binder(const sp<ProcessState>& proc,
                           const flat_binder_object& flat, wp<IBinder>* out);
 
-}; // namespace hardware
-}; // namespace android
+} // namespace hardware
+} // namespace android
 
 // ---------------------------------------------------------------------------
 

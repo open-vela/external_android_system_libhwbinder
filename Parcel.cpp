@@ -1989,5 +1989,5 @@ void Parcel::scanForFds() const
     mFdsKnown = true;
 }
 
-}; // namespace hardware
-}; // namespace android
+} // namespace hardware
+} // namespace android

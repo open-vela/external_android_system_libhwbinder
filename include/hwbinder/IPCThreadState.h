@@ -178,8 +178,8 @@ public:
             ProcessState::CallRestriction mCallRestriction;
 };
 
-}; // namespace hardware
-}; // namespace android
+} // namespace hardware
+} // namespace android
 
 // ---------------------------------------------------------------------------
 

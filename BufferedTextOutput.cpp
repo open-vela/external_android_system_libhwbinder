@@ -279,5 +279,5 @@ BufferedTextOutput::BufferState* BufferedTextOutput::getBuffer() const
     return mGlobalState;
 }
 
-}; // namespace hardware
-}; // namespace android
+} // namespace hardware
+} // namespace android
