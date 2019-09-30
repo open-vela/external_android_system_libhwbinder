@@ -1457,6 +1457,12 @@ status_t Parcel::readNullableNativeHandleNoDup(const native_handle_t **handle,
         return status;
     }
 
+    if (*handle == nullptr) {
+        // null handle already read above
+        ALOGE("Expecting non-null handle buffer");
+        return BAD_VALUE;
+    }
+
     int numFds = (*handle)->numFds;
     int numInts = (*handle)->numInts;
 
