@@ -737,9 +737,9 @@ status_t Parcel::writeEmbeddedBuffer(
         return BAD_VALUE;
     binder_buffer_object obj = {
         .hdr = { .type = BINDER_TYPE_PTR },
+        .flags = BINDER_BUFFER_FLAG_HAS_PARENT,
         .buffer = reinterpret_cast<binder_uintptr_t>(buffer),
         .length = length,
-        .flags = BINDER_BUFFER_FLAG_HAS_PARENT,
         .parent = parent_buffer_handle,
         .parent_offset = parent_offset,
     };
@@ -756,9 +756,9 @@ status_t Parcel::writeBuffer(const void *buffer, size_t length, size_t *handle)
         buffer, length, mObjectsSize);
     binder_buffer_object obj {
         .hdr = { .type = BINDER_TYPE_PTR },
+        .flags = 0,
         .buffer = reinterpret_cast<binder_uintptr_t>(buffer),
         .length = length,
-        .flags = 0,
     };
     if (handle != nullptr) {
         // We use an index into mObjects as a handle
