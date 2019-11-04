@@ -43,7 +43,7 @@ cc_defaults {
     // and test portability since this test pairs with specific hal
     // implementations
     whole_static_libs: [
-        "android.hardware.tests.libhwbinder@1.0-impl",
+        "android.hardware.tests.libhwbinder@1.0-impl.test",
     ],
 }
 
