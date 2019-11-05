@@ -45,6 +45,8 @@ cc_defaults {
     whole_static_libs: [
         "android.hardware.tests.libhwbinder@1.0-impl.test",
     ],
+
+    require_root: true,
 }
 
 cc_benchmark {
@@ -69,6 +71,7 @@ cc_benchmark {
     static_libs: [
         "android.hardware.tests.libbinder",
     ],
+    require_root: true,
 }
 
 // build for throughput benchmark test for hwbinder.
