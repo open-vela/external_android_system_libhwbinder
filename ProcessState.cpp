@@ -454,9 +454,8 @@ ProcessState::ProcessState(size_t mmap_size)
             mDriverFD = -1;
         }
     }
-    else {
-        ALOGE("Binder driver could not be opened.");
-    }
+
+    LOG_ALWAYS_FATAL_IF(mDriverFD < 0, "Binder driver could not be opened. Terminating.");
 }
 
 ProcessState::~ProcessState()
