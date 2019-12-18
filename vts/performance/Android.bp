@@ -27,12 +27,12 @@ cc_defaults {
         "liblog",
         "libutils",
         "libcutils",
+        "libvndksupport",
     ],
 
     static_libs: [
         "android.hardware.tests.libhwbinder@1.0",
         "libbinderthreadstate",
-        "libvndksupport",
         "libhidlbase_pgo",
     ],
 
