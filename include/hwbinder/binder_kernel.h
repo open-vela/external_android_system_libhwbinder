@@ -17,15 +17,24 @@
 #ifndef ANDROID_HARDWARE_BINDER_KERNEL_H
 #define ANDROID_HARDWARE_BINDER_KERNEL_H
 
+#include <linux/android/binder.h>
+
 /**
- * Only need this file to fix the __packed__ keyword.
+ * This file exists because the uapi kernel headers in bionic are built
+ * from upstream kernel headers only, and not all of the hwbinder kernel changes
+ * have made it upstream yet. Therefore, the modifications to the
+ * binder header are added locally in this file.
  */
 
-// TODO(b/31559095): bionic on host
-#ifndef __ANDROID__
-#define __packed __attribute__((__packed__))
-#endif
+enum {
+	BINDER_BUFFER_FLAG_REF          = 1U << 1,
+};
 
-#include <linux/android/binder.h>
+enum {
+        FLAT_BINDER_FLAG_SCHEDPOLICY_MASK = 0x600,
+        FLAT_BINDER_FLAG_SCHEDPOLICY_SHIFT = 9,
+        FLAT_BINDER_FLAG_INHERIT_RT = 0x800,
+};
+
 
 #endif // ANDROID_HARDWARE_BINDER_KERNEL_H

@@ -22,6 +22,7 @@
 #include <hwbinder/Binder.h>
 #include <hwbinder/BpHwBinder.h>
 #include <hwbinder/TextOutput.h>
+#include <hwbinder/binder_kernel.h>
 
 #include <android-base/macros.h>
 #include <utils/CallStack.h>
@@ -29,14 +30,13 @@
 #include <utils/SystemClock.h>
 #include <utils/threads.h>
 
-#include "binder_kernel.h"
+#include <private/binder/binder_module.h>
 #include <hwbinder/Static.h>
 
-#include <atomic>
 #include <errno.h>
 #include <inttypes.h>
-#include <linux/sched.h>
 #include <pthread.h>
+#include <sched.h>
 #include <signal.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
@@ -112,9 +112,8 @@ static const char *kCommandStrings[] = {
     "BC_DEAD_BINDER_DONE"
 };
 
-static const char* getReturnString(uint32_t cmd)
+static const char* getReturnString(size_t idx)
 {
-    size_t idx = cmd & _IOC_NRMASK;
     if (idx < sizeof(kReturnStrings) / sizeof(kReturnStrings[0]))
         return kReturnStrings[idx];
     else
@@ -276,13 +275,13 @@ static const void* printCommand(TextOutput& out, const void* _cmd)
 }
 
 static pthread_mutex_t gTLSMutex = PTHREAD_MUTEX_INITIALIZER;
-static std::atomic<bool> gHaveTLS = false;
+static bool gHaveTLS = false;
 static pthread_key_t gTLS = 0;
-static std::atomic<bool> gShutdown = false;
+static bool gShutdown = false;
 
 IPCThreadState* IPCThreadState::self()
 {
-    if (gHaveTLS.load(std::memory_order_acquire)) {
+    if (gHaveTLS) {
 restart:
         const pthread_key_t k = gTLS;
         IPCThreadState* st = (IPCThreadState*)pthread_getspecific(k);
@@ -290,14 +289,13 @@ restart:
         return new IPCThreadState;
     }
 
-    // Racey, heuristic test for simultaneous shutdown.
-    if (gShutdown.load(std::memory_order_relaxed)) {
+    if (gShutdown) {
         ALOGW("Calling IPCThreadState::self() during shutdown is dangerous, expect a crash.\n");
         return nullptr;
     }
 
     pthread_mutex_lock(&gTLSMutex);
-    if (!gHaveTLS.load(std::memory_order_relaxed)) {
+    if (!gHaveTLS) {
         int key_create_value = pthread_key_create(&gTLS, threadDestructor);
         if (key_create_value != 0) {
             pthread_mutex_unlock(&gTLSMutex);
@@ -305,7 +303,7 @@ restart:
                     strerror(key_create_value));
             return nullptr;
         }
-        gHaveTLS.store(true, std::memory_order_release);
+        gHaveTLS = true;
     }
     pthread_mutex_unlock(&gTLSMutex);
     goto restart;
@@ -313,7 +311,7 @@ restart:
 
 IPCThreadState* IPCThreadState::selfOrNull()
 {
-    if (gHaveTLS.load(std::memory_order_acquire)) {
+    if (gHaveTLS) {
         const pthread_key_t k = gTLS;
         IPCThreadState* st = (IPCThreadState*)pthread_getspecific(k);
         return st;
@@ -323,9 +321,9 @@ IPCThreadState* IPCThreadState::selfOrNull()
 
 void IPCThreadState::shutdown()
 {
-    gShutdown.store(true, std::memory_order_relaxed);
+    gShutdown = true;
 
-    if (gHaveTLS.load(std::memory_order_acquire)) {
+    if (gHaveTLS) {
         // XXX Need to wait for all thread pool threads to exit!
         IPCThreadState* st = (IPCThreadState*)pthread_getspecific(gTLS);
         if (st) {
@@ -333,9 +331,12 @@ void IPCThreadState::shutdown()
             pthread_setspecific(gTLS, nullptr);
         }
         pthread_key_delete(gTLS);
-        gHaveTLS.store(false, std::memory_order_release);
+        gHaveTLS = false;
     }
 }
+
+// TODO(b/66905301): remove symbol
+void IPCThreadState::disableBackgroundScheduling(bool /* disable */) {}
 
 sp<ProcessState> IPCThreadState::process()
 {
@@ -560,8 +561,9 @@ void IPCThreadState::joinThreadPool(bool isMain)
         result = getAndExecuteCommand();
 
         if (result < NO_ERROR && result != TIMED_OUT && result != -ECONNREFUSED && result != -EBADF) {
-            LOG_ALWAYS_FATAL("getAndExecuteCommand(fd=%d) returned unexpected error %d, aborting",
+            ALOGE("getAndExecuteCommand(fd=%d) returned unexpected error %d, aborting",
                   mProcess->mDriverFD, result);
+            abort();
         }
 
         // Let this thread exit the thread pool if it is no longer
@@ -645,11 +647,11 @@ status_t IPCThreadState::transact(int32_t handle,
     if ((flags & TF_ONE_WAY) == 0) {
         if (UNLIKELY(mCallRestriction != ProcessState::CallRestriction::NONE)) {
             if (mCallRestriction == ProcessState::CallRestriction::ERROR_IF_NOT_ONEWAY) {
-                ALOGE("Process making non-oneway call (code: %u) but is restricted.", code);
+                ALOGE("Process making non-oneway call but is restricted.");
                 CallStack::logStack("non-oneway call", CallStack::getCurrent(10).get(),
                     ANDROID_LOG_ERROR);
             } else /* FATAL_IF_NOT_ONEWAY */ {
-                LOG_ALWAYS_FATAL("Process may not make oneway calls (code: %u).", code);
+                LOG_ALWAYS_FATAL("Process may not make oneway calls.");
             }
         }
 
@@ -733,7 +735,7 @@ status_t IPCThreadState::attemptIncStrongHandle(int32_t handle)
     waitForResponse(nullptr, &result);
 
 #if LOG_REFCOUNTS
-    ALOGV("IPCThreadState::attemptIncStrongHandle(%ld) = %s\n",
+    printf("IPCThreadState::attemptIncStrongHandle(%ld) = %s\n",
         handle, result == NO_ERROR ? "SUCCESS" : "FAILURE");
 #endif
 
@@ -748,7 +750,7 @@ status_t IPCThreadState::attemptIncStrongHandle(int32_t handle)
 void IPCThreadState::expungeHandle(int32_t handle, IBinder* binder)
 {
 #if LOG_REFCOUNTS
-    ALOGV("IPCThreadState::expungeHandle(%ld)\n", handle);
+    printf("IPCThreadState::expungeHandle(%ld)\n", handle);
 #endif
     self()->mProcess->expungeHandle(handle, binder);  // NOLINT
 }
@@ -1028,11 +1030,9 @@ status_t IPCThreadState::writeTransactionData(int32_t cmd, uint32_t binderFlags,
     return NO_ERROR;
 }
 
-sp<BHwBinder> the_context_object;
-
 void IPCThreadState::setTheContextObject(sp<BHwBinder> obj)
 {
-    the_context_object = obj;
+    mContextObject = obj;
 }
 
 bool IPCThreadState::isLooperThread()
@@ -1209,7 +1209,7 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
                 }
 
             } else {
-                error = the_context_object->transact(tr.code, buffer, &reply, tr.flags, reply_callback);
+                error = mContextObject->transact(tr.code, buffer, &reply, tr.flags, reply_callback);
             }
 
             mIPCThreadStateBase->popCurrentState();
@@ -1273,7 +1273,7 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
         break;
 
     default:
-        ALOGE("*** BAD COMMAND %d received from Binder driver\n", cmd);
+        printf("*** BAD COMMAND %d received from Binder driver\n", cmd);
         result = UNKNOWN_ERROR;
         break;
     }
@@ -1321,5 +1321,5 @@ void IPCThreadState::freeBuffer(Parcel* parcel, const uint8_t* data,
     state->mOut.writePointer((uintptr_t)data);
 }
 
-} // namespace hardware
-} // namespace android
+}; // namespace hardware
+}; // namespace android
