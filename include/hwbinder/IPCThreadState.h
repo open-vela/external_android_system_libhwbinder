@@ -89,6 +89,11 @@ public:
 
     static  void                shutdown();
 
+            // TODO(b/66905301): remove symbol
+private:
+    static  void                disableBackgroundScheduling(bool disable);
+public:
+
             // Call blocks until the number of executing binder threads is less than
             // the maximum number of binder threads threads allowed for this process.
             void                blockUntilThreadAvailable();
@@ -169,6 +174,7 @@ public:
             uid_t               mCallingUid;
             int32_t             mStrictModePolicy;
             int32_t             mLastTransactionBinderFlags;
+            sp<BHwBinder>         mContextObject;
             bool                mIsLooper;
             bool mIsPollingThread;
 
@@ -178,8 +184,8 @@ public:
             ProcessState::CallRestriction mCallRestriction;
 };
 
-} // namespace hardware
-} // namespace android
+}; // namespace hardware
+}; // namespace android
 
 // ---------------------------------------------------------------------------
 
