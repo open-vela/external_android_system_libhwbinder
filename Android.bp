@@ -47,14 +47,6 @@ cc_defaults {
 
 cc_defaults {
     name: "libhwbinder-impl-shared-libs",
-    defaults: ["libhwbinder-impl-shared-libs-no-vndk-private"],
-    shared_libs: [
-        "libbinderthreadstate",
-    ],
-}
-
-cc_defaults {
-    name: "libhwbinder-impl-shared-libs-no-vndk-private",
     shared_libs: [
         "libbase",
         "liblog",
@@ -82,10 +74,6 @@ cc_library {
 cc_library_static {
     name: "libhwbinder-impl-internal",
     include_dirs: [
-        // TODO(b/135299443): allow this library to link against vndk-private libs
-        // and instead rely on the fact that users of this static library must be
-        // vndk (since they must use libbinderthreadstate).
-        "frameworks/native/libs/binderthreadstate/include/",
         // TODO(b/31559095): get headers from bionic on host
         "bionic/libc/kernel/android/uapi/",
         "bionic/libc/kernel/uapi/",
@@ -93,7 +81,7 @@ cc_library_static {
 
     defaults: [
         "libhwbinder_defaults",
-        "libhwbinder-impl-shared-libs-no-vndk-private",
+        "libhwbinder-impl-shared-libs",
         "hwbinder_pgo",
         "hwbinder_lto",
     ],
