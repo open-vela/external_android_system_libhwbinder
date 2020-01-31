@@ -17,7 +17,6 @@
 #define LOG_TAG "hw-IPCThreadState"
 
 #include <hwbinder/IPCThreadState.h>
-#include <binderthreadstate/IPCThreadStateBase.h>
 
 #include <hwbinder/Binder.h>
 #include <hwbinder/BpHwBinder.h>
@@ -771,6 +770,7 @@ status_t IPCThreadState::clearDeathNotification(int32_t handle, BpHwBinder* prox
 
 IPCThreadState::IPCThreadState()
     : mProcess(ProcessState::self()),
+      mServingStackPointer(nullptr),
       mStrictModePolicy(0),
       mLastTransactionBinderFlags(0),
       mIsLooper(false),
@@ -780,8 +780,6 @@ IPCThreadState::IPCThreadState()
     clearCaller();
     mIn.setDataCapacity(256);
     mOut.setDataCapacity(256);
-
-    mIPCThreadStateBase = IPCThreadStateBase::self();
 }
 
 IPCThreadState::~IPCThreadState()
@@ -1143,15 +1141,15 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
                 "Not enough command data for brTRANSACTION");
             if (result != NO_ERROR) break;
 
-            // Record the fact that we're in a hwbinder call
-            mIPCThreadStateBase->pushCurrentState(
-                IPCThreadStateBase::CallState::HWBINDER);
             Parcel buffer;
             buffer.ipcSetDataReference(
                 reinterpret_cast<const uint8_t*>(tr.data.ptr.buffer),
                 tr.data_size,
                 reinterpret_cast<const binder_size_t*>(tr.data.ptr.offsets),
                 tr.offsets_size/sizeof(binder_size_t), freeBuffer, this);
+
+            const void* origServingStackPointer = mServingStackPointer;
+            mServingStackPointer = &origServingStackPointer; // anything on the stack
 
             const pid_t origPid = mCallingPid;
             const char* origSid = mCallingSid;
@@ -1212,7 +1210,6 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
                 error = the_context_object->transact(tr.code, buffer, &reply, tr.flags, reply_callback);
             }
 
-            mIPCThreadStateBase->popCurrentState();
             if ((tr.flags & TF_ONE_WAY) == 0) {
                 if (!reply_sent) {
                     // Should have been a reply but there wasn't, so there
@@ -1233,6 +1230,7 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
             //ALOGI("<<<< TRANSACT from pid %d restore pid %d sid %s uid %d\n",
             //     mCallingPid, origPid, (origSid ? origSid : "<N/A>"), origUid);
 
+            mServingStackPointer = origServingStackPointer;
             mCallingPid = origPid;
             mCallingSid = origSid;
             mCallingUid = origUid;
@@ -1285,9 +1283,8 @@ status_t IPCThreadState::executeCommand(int32_t cmd)
     return result;
 }
 
-bool IPCThreadState::isServingCall() const
-{
-    return mIPCThreadStateBase->getCurrentBinderCallState() == IPCThreadStateBase::CallState::HWBINDER;
+const void* IPCThreadState::getServingStackPointer() const {
+    return mServingStackPointer;
 }
 
 void IPCThreadState::threadDestructor(void *st)
