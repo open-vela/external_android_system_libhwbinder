@@ -677,8 +677,10 @@ restart_write:
         if (err != NO_ERROR) return err;
     }
     if (!enoughObjects) {
+        if (mObjectsSize > SIZE_MAX - 2) return NO_MEMORY; // overflow
+        if (mObjectsSize + 2 > SIZE_MAX / 3) return NO_MEMORY; // overflow
         size_t newSize = ((mObjectsSize+2)*3)/2;
-        if (newSize * sizeof(binder_size_t) < mObjectsSize) return NO_MEMORY;   // overflow
+        if (newSize > SIZE_MAX / sizeof(binder_size_t)) return NO_MEMORY; // overflow
         binder_size_t* objects = (binder_size_t*)realloc(mObjects, newSize*sizeof(binder_size_t));
         if (objects == nullptr) return NO_MEMORY;
         mObjects = objects;
@@ -1453,6 +1455,12 @@ status_t Parcel::readNullableNativeHandleNoDup(const native_handle_t **handle,
         return status;
     }
 
+    if (*handle == nullptr) {
+        // null handle already read above
+        ALOGE("Expecting non-null handle buffer");
+        return BAD_VALUE;
+    }
+
     int numFds = (*handle)->numFds;
     int numInts = (*handle)->numInts;
 
@@ -1713,11 +1721,10 @@ status_t Parcel::growData(size_t len)
         // inadvertent conversion from a negative int.
         return BAD_VALUE;
     }
-
+    if (len > SIZE_MAX - mDataSize) return NO_MEMORY; // overflow
+    if (mDataSize + len > SIZE_MAX / 3) return NO_MEMORY; // overflow
     size_t newSize = ((mDataSize+len)*3)/2;
-    return (newSize <= mDataSize)
-            ? (status_t) NO_MEMORY
-            : continueWrite(newSize);
+    return continueWrite(newSize);
 }
 
 status_t Parcel::restartWrite(size_t desired)
@@ -1864,10 +1871,16 @@ status_t Parcel::continueWrite(size_t desired)
                 }
                 release_object(proc, *flat, this);
             }
-            binder_size_t* objects =
-                (binder_size_t*)realloc(mObjects, objectsSize*sizeof(binder_size_t));
-            if (objects) {
-                mObjects = objects;
+
+            if (objectsSize == 0) {
+                free(mObjects);
+                mObjects = nullptr;
+            } else {
+                binder_size_t* objects =
+                    (binder_size_t*)realloc(mObjects, objectsSize*sizeof(binder_size_t));
+                if (objects) {
+                    mObjects = objects;
+                }
             }
             mObjectsSize = objectsSize;
             mNextObjectHint = 0;
