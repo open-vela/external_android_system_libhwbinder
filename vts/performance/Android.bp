@@ -32,7 +32,6 @@ cc_defaults {
 
     static_libs: [
         "android.hardware.tests.libhwbinder@1.0",
-        "libbinderthreadstate",
         "libhidlbase_pgo",
     ],
 
