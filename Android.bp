@@ -88,6 +88,14 @@ cc_library_static {
     host_supported: true,
     recovery_available: true,
     vendor_available: true,
+    apex_available: [
+        "//apex_available:platform",
+        "com.android.neuralnetworks",
+        "com.android.bluetooth.updatable",
+        "com.android.media",
+        "com.android.media.swcodec",
+        "com.android.tethering",
+    ],
 }
 
 // Only libhwbinder_benchmark needs to have pgo enabled. When all places
