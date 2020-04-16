@@ -96,6 +96,7 @@ cc_library_static {
         "com.android.media.swcodec",
         "com.android.tethering",
     ],
+    min_sdk_version: "29",
 }
 
 // Only libhwbinder_benchmark needs to have pgo enabled. When all places
