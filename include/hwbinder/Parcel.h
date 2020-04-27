@@ -118,8 +118,6 @@ public:
                                                size_t parent_offset = 0);
     status_t            writeNativeHandleNoDup(const native_handle* handle);
 
-    void                remove(size_t start, size_t amt);
-
     status_t            read(void* outData, size_t len) const;
     const void*         readInplace(size_t len) const;
     status_t            readInt8(int8_t *pArg) const;
