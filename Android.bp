@@ -60,6 +60,7 @@ cc_defaults {
 }
 
 // WARNING: this should no longer be used
+// This is automatically removed by bpfix. Once there are no makefiles, fixes can be automatically applied, and this can be removed.
 cc_library {
     name: "libhwbinder",
     vendor_available: true,
