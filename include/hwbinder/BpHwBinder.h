@@ -114,7 +114,6 @@ private:
             volatile int32_t    mObitsSent;
             Vector<Obituary>*   mObituaries;
             ObjectManager       mObjects;
-            Parcel*             mConstantData;
     mutable String16            mDescriptorCache;
 };
 
