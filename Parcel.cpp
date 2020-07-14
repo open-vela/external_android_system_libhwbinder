@@ -35,7 +35,6 @@
 #include <hwbinder/IPCThreadState.h>
 #include <hwbinder/Parcel.h>
 #include <hwbinder/ProcessState.h>
-#include <hwbinder/TextOutput.h>
 
 #include <cutils/ashmem.h>
 #include <utils/Debug.h>
@@ -46,6 +45,7 @@
 
 #include "binder_kernel.h"
 #include <hwbinder/Static.h>
+#include "TextOutput.h"
 
 #include <atomic>
 

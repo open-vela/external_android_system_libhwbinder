@@ -19,7 +19,8 @@
 
 #include <hwbinder/Static.h>
 
-#include <hwbinder/BufferedTextOutput.h>
+#include "BufferedTextOutput.h"
+
 #include <hwbinder/IPCThreadState.h>
 #include <utils/Log.h>
 

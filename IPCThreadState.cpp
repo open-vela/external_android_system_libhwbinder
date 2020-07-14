@@ -20,7 +20,6 @@
 
 #include <hwbinder/Binder.h>
 #include <hwbinder/BpHwBinder.h>
-#include <hwbinder/TextOutput.h>
 
 #include <android-base/macros.h>
 #include <utils/CallStack.h>
@@ -30,6 +29,7 @@
 
 #include "binder_kernel.h"
 #include <hwbinder/Static.h>
+#include "TextOutput.h"
 
 #include <atomic>
 #include <errno.h>

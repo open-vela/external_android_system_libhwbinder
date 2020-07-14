@@ -16,7 +16,6 @@
 
 #define LOG_TAG "hw-BufferedTextOutput"
 
-#include <hwbinder/BufferedTextOutput.h>
 #include <hwbinder/Debug.h>
 
 #include <cutils/atomic.h>
@@ -25,6 +24,7 @@
 #include <utils/RefBase.h>
 #include <utils/Vector.h>
 
+#include "BufferedTextOutput.h"
 #include <hwbinder/Static.h>
 
 #include <pthread.h>
