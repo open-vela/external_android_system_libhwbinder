@@ -17,7 +17,8 @@
 #ifndef ANDROID_HARDWARE_BUFFEREDTEXTOUTPUT_H
 #define ANDROID_HARDWARE_BUFFEREDTEXTOUTPUT_H
 
-#include <hwbinder/TextOutput.h>
+#include "TextOutput.h"
+
 #include <utils/threads.h>
 #include <sys/uio.h>
 
