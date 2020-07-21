@@ -38,6 +38,7 @@ public:
     static  sp<ProcessState>    self();
     static  sp<ProcessState>    selfOrNull();
     // Note: don't call self() or selfOrNull() before initWithMmapSize()
+    // with '0' as an argument, this is the same as selfOrNull
     static  sp<ProcessState>    initWithMmapSize(size_t mmapSize); // size in bytes
 
             void                setContextObject(const sp<IBinder>& object);
@@ -91,8 +92,10 @@ public:
             void setCallRestriction(CallRestriction restriction);
 
 private:
+    static  sp<ProcessState>    init(size_t mmapSize, bool requireMmapSize);
+
     friend class IPCThreadState;
-            explicit            ProcessState(size_t mmap_size);
+            explicit            ProcessState(size_t mmapSize);
                                 ~ProcessState();
 
                                 ProcessState(const ProcessState& o);
