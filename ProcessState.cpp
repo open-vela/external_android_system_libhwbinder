@@ -66,28 +66,37 @@ protected:
 
 sp<ProcessState> ProcessState::self()
 {
-    Mutex::Autolock _l(gProcessMutex);
-    if (gProcess != nullptr) {
-        return gProcess;
-    }
-    gProcess = new ProcessState(DEFAULT_BINDER_VM_SIZE);
-    return gProcess;
+    return init(DEFAULT_BINDER_VM_SIZE, false /*requireMmapSize*/);
 }
 
 sp<ProcessState> ProcessState::selfOrNull() {
-    Mutex::Autolock _l(gProcessMutex);
-    return gProcess;
+    return init(0, false /*requireMmapSize*/);
 }
 
-sp<ProcessState> ProcessState::initWithMmapSize(size_t mmap_size) {
-    Mutex::Autolock _l(gProcessMutex);
-    if (gProcess != nullptr) {
-        LOG_ALWAYS_FATAL_IF(mmap_size != gProcess->getMmapSize(),
-                "ProcessState already initialized with a different mmap size.");
+sp<ProcessState> ProcessState::initWithMmapSize(size_t mmapSize) {
+    return init(mmapSize, true /*requireMmapSize*/);
+}
+
+sp<ProcessState> ProcessState::init(size_t mmapSize, bool requireMmapSize) {
+    [[clang::no_destroy]] static sp<ProcessState> gProcess;
+    [[clang::no_destroy]] static std::mutex gProcessMutex;
+
+    if (mmapSize == 0) {
+        std::lock_guard<std::mutex> l(gProcessMutex);
         return gProcess;
     }
 
-    gProcess = new ProcessState(mmap_size);
+    [[clang::no_destroy]] static std::once_flag gProcessOnce;
+    std::call_once(gProcessOnce, [&](){
+        std::lock_guard<std::mutex> l(gProcessMutex);
+        gProcess = new ProcessState(mmapSize);
+    });
+
+    if (requireMmapSize) {
+        LOG_ALWAYS_FATAL_IF(mmapSize != gProcess->getMmapSize(),
+            "ProcessState already initialized with a different mmap size.");
+    }
+
     return gProcess;
 }
 
@@ -430,7 +439,7 @@ static int open_driver()
     return fd;
 }
 
-ProcessState::ProcessState(size_t mmap_size)
+ProcessState::ProcessState(size_t mmapSize)
     : mDriverFD(open_driver())
     , mVMStart(MAP_FAILED)
     , mThreadCountLock(PTHREAD_MUTEX_INITIALIZER)
@@ -444,7 +453,7 @@ ProcessState::ProcessState(size_t mmap_size)
     , mThreadPoolStarted(false)
     , mSpawnThreadOnStart(true)
     , mThreadPoolSeq(1)
-    , mMmapSize(mmap_size)
+    , mMmapSize(mmapSize)
     , mCallRestriction(CallRestriction::NONE)
 {
     if (mDriverFD >= 0) {

@@ -50,10 +50,5 @@ protected:
 static LogTextOutput gLogTextOutput;
 TextOutput& alog(gLogTextOutput);
 
-// ------------ ProcessState.cpp
-
-Mutex& gProcessMutex = *new Mutex;
-sp<ProcessState> gProcess;
-
 }   // namespace hardware
 }   // namespace android
