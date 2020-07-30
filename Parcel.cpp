@@ -465,7 +465,7 @@ void* Parcel::writeInplace(size_t len)
 
     const size_t padded = pad_size(len);
 
-    // sanity check for integer overflow
+    // validate for integer overflow
     if (mDataPos+padded < mDataPos) {
         return nullptr;
     }
