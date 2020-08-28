@@ -82,6 +82,11 @@ cc_library {
     vendor_available: true,
 
     export_include_dirs: ["include"],
+
+    visibility: [
+        ":__subpackages__",
+        "//vendor:__subpackages__",
+    ],
 }
 
 // Combined into libhidlbase for efficiency.
