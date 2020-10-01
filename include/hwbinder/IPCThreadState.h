@@ -87,10 +87,6 @@ public:
 
     static  void                shutdown();
 
-            // Call blocks until the number of executing binder threads is less than
-            // the maximum number of binder threads threads allowed for this process.
-            void                blockUntilThreadAvailable();
-
             // Service manager registration
             void                setTheContextObject(sp<BHwBinder> obj);
 
