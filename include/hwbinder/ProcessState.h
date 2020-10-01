@@ -114,7 +114,6 @@ private:
 
             // Protects thread count variable below.
             pthread_mutex_t     mThreadCountLock;
-            pthread_cond_t      mThreadCountDecrement;
             // Number of binder threads current executing a command.
             size_t              mExecutingThreadsCount;
             // Maximum number for binder threads allowed for this process.
