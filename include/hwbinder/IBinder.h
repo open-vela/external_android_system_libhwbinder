@@ -74,7 +74,11 @@ public:
         LAST_HIDL_TRANSACTION   = 0x0fffffff,
 
         // Corresponds to TF_ONE_WAY -- an asynchronous call.
-        FLAG_ONEWAY             = 0x00000001
+        FLAG_ONEWAY             = 0x00000001,
+
+        // Corresponds to TF_CLEAR_BUF -- clear transaction buffers after call
+        // is made
+        FLAG_CLEAR_BUF          = 0x00000020,
     };
 
                           IBinder();
