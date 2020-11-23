@@ -17,15 +17,15 @@
 #ifndef ANDROID_HARDWARE_BINDER_KERNEL_H
 #define ANDROID_HARDWARE_BINDER_KERNEL_H
 
+/**
+ * Only need this file to fix the __packed__ keyword.
+ */
+
 // TODO(b/31559095): bionic on host
 #ifndef __ANDROID__
 #define __packed __attribute__((__packed__))
 #endif
 
 #include <linux/android/binder.h>
-
-enum transaction_flags_ext {
-    TF_CLEAR_BUF = 0x20, /* clear buffer on txn complete */
-};
 
 #endif // ANDROID_HARDWARE_BINDER_KERNEL_H

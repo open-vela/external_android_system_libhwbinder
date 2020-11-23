@@ -110,10 +110,6 @@ status_t BHwBinder::transact(
 {
     data.setDataPosition(0);
 
-    if (reply != nullptr && (flags & FLAG_CLEAR_BUF)) {
-        reply->markSensitive();
-    }
-
     status_t err = NO_ERROR;
     switch (code) {
         default:
