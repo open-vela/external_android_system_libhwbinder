@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 The Android Open Source Project
+ * Copyright (C) 2020 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef ANDROID_HARDWARE_BINDER_KERNEL_H
-#define ANDROID_HARDWARE_BINDER_KERNEL_H
+#include <cstdint>
+#include <stddef.h>
 
-// TODO(b/31559095): bionic on host
-#ifndef __ANDROID__
-#define __packed __attribute__((__packed__))
-#endif
+namespace android::hardware {
 
-#include <linux/android/binder.h>
+// avoid optimizations
+void zeroMemory(uint8_t* data, size_t size);
 
-enum transaction_flags_ext {
-    TF_CLEAR_BUF = 0x20, /* clear buffer on txn complete */
-};
-
-#endif // ANDROID_HARDWARE_BINDER_KERNEL_H
+}   // namespace android::hardware

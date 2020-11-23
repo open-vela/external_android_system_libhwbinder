@@ -48,6 +48,7 @@ cc_defaults {
         "ProcessState.cpp",
         "Static.cpp",
         "TextOutput.cpp",
+        "Utils.cpp",
     ],
 
     product_variables: {
