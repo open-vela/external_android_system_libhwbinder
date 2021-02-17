@@ -24,8 +24,4 @@
 
 #include <linux/android/binder.h>
 
-enum transaction_flags_ext {
-    TF_CLEAR_BUF = 0x20, /* clear buffer on txn complete */
-};
-
 #endif // ANDROID_HARDWARE_BINDER_KERNEL_H
