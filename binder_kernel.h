@@ -22,6 +22,21 @@
 #define __packed __attribute__((__packed__))
 #endif
 
+#include <sys/ioctl.h>
 #include <linux/android/binder.h>
+
+#ifndef BR_ONEWAY_SPAM_SUSPECT
+// Temporary definition of BR_ONEWAY_SPAM_SUSPECT. For production
+// this will come from UAPI binder.h
+#define BR_ONEWAY_SPAM_SUSPECT _IO('r', 19)
+#endif //BR_ONEWAY_SPAM_SUSPECT
+
+#ifndef BINDER_ENABLE_ONEWAY_SPAM_DETECTION
+/*
+ * Temporary definitions for oneway spam detection support. For the final version
+ * these will be defined in the UAPI binder.h file from upstream kernel.
+ */
+#define BINDER_ENABLE_ONEWAY_SPAM_DETECTION _IOW('b', 16, __u32)
+#endif //BINDER_ENABLE_ONEWAY_SPAM_DETECTION
 
 #endif // ANDROID_HARDWARE_BINDER_KERNEL_H

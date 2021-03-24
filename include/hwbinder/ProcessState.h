@@ -58,6 +58,7 @@ public:
             void                spawnPooledThread(bool isMain);
 
             status_t            setThreadPoolConfiguration(size_t maxThreads, bool callerJoinsPool);
+            status_t            enableOnewaySpamDetection(bool enable);
             size_t              getMaxThreads();
             void                giveThreadPoolName();
 
