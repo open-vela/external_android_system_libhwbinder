@@ -40,6 +40,7 @@
 
 #define DEFAULT_BINDER_VM_SIZE ((1 * 1024 * 1024) - sysconf(_SC_PAGE_SIZE) * 2)
 #define DEFAULT_MAX_BINDER_THREADS 0
+#define DEFAULT_ENABLE_ONEWAY_SPAM_DETECTION 1
 
 // -------------------------------------------------------------------------
 
@@ -343,6 +344,15 @@ status_t ProcessState::setThreadPoolConfiguration(size_t maxThreads, bool caller
     return NO_ERROR;
 }
 
+status_t ProcessState::enableOnewaySpamDetection(bool enable) {
+    uint32_t enableDetection = enable ? 1 : 0;
+    if (ioctl(mDriverFD, BINDER_ENABLE_ONEWAY_SPAM_DETECTION, &enableDetection) == -1) {
+        ALOGE("Binder ioctl to enable oneway spam detection failed: %s", strerror(errno));
+        return -errno;
+    }
+    return NO_ERROR;
+}
+
 size_t ProcessState::getMaxThreads() {
     return mMaxThreads;
 }
@@ -371,6 +381,11 @@ static int open_driver()
         result = ioctl(fd, BINDER_SET_MAX_THREADS, &maxThreads);
         if (result == -1) {
             ALOGE("Binder ioctl to set max threads failed: %s", strerror(errno));
+        }
+        uint32_t enable = DEFAULT_ENABLE_ONEWAY_SPAM_DETECTION;
+        result = ioctl(fd, BINDER_ENABLE_ONEWAY_SPAM_DETECTION, &enable);
+        if (result == -1) {
+            ALOGE("Binder ioctl to enable oneway spam detection failed: %s", strerror(errno));
         }
     } else {
         ALOGW("Opening '/dev/hwbinder' failed: %s\n", strerror(errno));
