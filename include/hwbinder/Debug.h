@@ -21,10 +21,6 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 
-// WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,
-// this means that it is only relevant to HIDL. Any AIDL- or libbinder-specific
-// code should not try to use these things.
-
 namespace android {
 namespace hardware {
 // ---------------------------------------------------------------------------
@@ -36,19 +32,19 @@ const char* stringForIndent(int32_t indentLevel);
 typedef void (*debugPrintFunc)(void* cookie, const char* txt);
 
 void printTypeCode(uint32_t typeCode,
-    debugPrintFunc func = nullptr, void* cookie = nullptr);
+    debugPrintFunc func = 0, void* cookie = 0);
 
 void printHexData(int32_t indent, const void *buf, size_t length,
     size_t bytesPerLine=16, int32_t singleLineBytesCutoff=16,
     size_t alignment=0, bool cArrayStyle=false,
-    debugPrintFunc func = nullptr, void* cookie = nullptr);
+    debugPrintFunc func = 0, void* cookie = 0);
 
 ssize_t getHWBinderKernelReferences(size_t count, uintptr_t* buf);
 
 __END_DECLS
 
 // ---------------------------------------------------------------------------
-} // namespace hardware
-} // namespace android
+}; // namespace hardware
+}; // namespace android
 
 #endif // ANDROID_HARDWARE_BINDER_DEBUG_H

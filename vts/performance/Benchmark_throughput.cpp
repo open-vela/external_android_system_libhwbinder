@@ -28,7 +28,6 @@
 
 #include <android/hardware/tests/libhwbinder/1.0/IBenchmark.h>
 #include <hidl/HidlSupport.h>
-#include <hidl/ServiceManagement.h>
 
 using namespace std;
 using namespace android;
@@ -298,7 +297,7 @@ void signal_all(vector<Pipe>& v) {
 }
 
 int main(int argc, char *argv[]) {
-    android::hardware::details::setTrebleTestingOverride(true);
+    setenv("TREBLE_TESTING_OVERRIDE", "true", true);
 
     enum HwBinderMode {
         kBinderize = 0,

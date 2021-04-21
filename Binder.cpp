@@ -16,20 +16,14 @@
 
 #include <hwbinder/Binder.h>
 
-#include <android-base/macros.h>
-#include <cutils/android_filesystem_config.h>
-#include <cutils/multiuser.h>
+#include <atomic>
+#include <utils/misc.h>
 #include <hwbinder/BpHwBinder.h>
 #include <hwbinder/IInterface.h>
-#include <hwbinder/IPCThreadState.h>
 #include <hwbinder/Parcel.h>
-#include <utils/Log.h>
-#include <utils/misc.h>
 
-#include <linux/sched.h>
+#include <sched.h>
 #include <stdio.h>
-
-#include <atomic>
 
 namespace android {
 namespace hardware {
@@ -49,12 +43,12 @@ IBinder::~IBinder()
 
 BHwBinder* IBinder::localBinder()
 {
-    return nullptr;
+    return NULL;
 }
 
 BpHwBinder* IBinder::remoteBinder()
 {
-    return nullptr;
+    return NULL;
 }
 
 bool IBinder::checkSubclass(const void* /*subclassID*/) const
@@ -108,7 +102,7 @@ void BHwBinder::setRequestingSid(bool requestingSid) {
         if (!e) return; // out of memory
     }
 
-    e->mRequestingSid = requestingSid;
+    e->mRequestingSid = true;
 }
 
 status_t BHwBinder::transact(
@@ -116,26 +110,13 @@ status_t BHwBinder::transact(
 {
     data.setDataPosition(0);
 
-    if (reply != nullptr && (flags & FLAG_CLEAR_BUF)) {
-        reply->markSensitive();
-    }
-
-    // extra comment to try to force running all tests
-    if (UNLIKELY(code == HIDL_DEBUG_TRANSACTION)) {
-        uid_t uid = IPCThreadState::self()->getCallingUid();
-        if (multiuser_get_app_id(uid) >= AID_APP_START) {
-            ALOGE("Can not call IBase::debug from apps");
-            return PERMISSION_DENIED;
-        }
-    }
-
     status_t err = NO_ERROR;
     switch (code) {
         default:
             err = onTransact(code, data, reply, flags,
                     [&](auto &replyParcel) {
                         replyParcel.setDataPosition(0);
-                        if (callback != nullptr) {
+                        if (callback != NULL) {
                             callback(replyParcel);
                         }
                     });
@@ -173,7 +154,7 @@ void BHwBinder::attachObject(
 void* BHwBinder::findObject(const void* objectID) const
 {
     Extras* e = mExtras.load(std::memory_order_acquire);
-    if (!e) return nullptr;
+    if (!e) return NULL;
 
     AutoMutex _l(e->mLock);
     return e->mObjects.find(objectID);
@@ -236,10 +217,13 @@ enum {
 };
 
 BpHwRefBase::BpHwRefBase(const sp<IBinder>& o)
-    : mRemote(o.get()), mRefs(nullptr), mState(0)
+    : mRemote(o.get()), mRefs(NULL), mState(0)
 {
+    extendObjectLifetime(OBJECT_LIFETIME_WEAK);
+
     if (mRemote) {
         mRemote->incStrong(this);           // Removed on first IncStrong().
+        mRefs = mRemote->createWeak(this);  // Held for our entire lifetime.
     }
 }
 
@@ -249,6 +233,7 @@ BpHwRefBase::~BpHwRefBase()
         if (!(mState.load(std::memory_order_relaxed)&kRemoteAcquired)) {
             mRemote->decStrong(this);
         }
+        mRefs->decWeak(this);
     }
 }
 
@@ -266,10 +251,10 @@ void BpHwRefBase::onLastStrongRef(const void* /*id*/)
 
 bool BpHwRefBase::onIncStrongAttempted(uint32_t /*flags*/, const void* /*id*/)
 {
-    return false;
+    return mRemote ? mRefs->attemptIncStrong(this) : false;
 }
 
 // ---------------------------------------------------------------------------
 
-} // namespace hardware
-} // namespace android
+}; // namespace hardware
+}; // namespace android
