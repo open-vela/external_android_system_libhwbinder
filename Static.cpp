@@ -19,8 +19,7 @@
 
 #include <hwbinder/Static.h>
 
-#include "BufferedTextOutput.h"
-
+#include <hwbinder/BufferedTextOutput.h>
 #include <hwbinder/IPCThreadState.h>
 #include <utils/Log.h>
 
@@ -49,6 +48,11 @@ protected:
 
 static LogTextOutput gLogTextOutput;
 TextOutput& alog(gLogTextOutput);
+
+// ------------ ProcessState.cpp
+
+Mutex& gProcessMutex = *new Mutex;
+sp<ProcessState> gProcess;
 
 }   // namespace hardware
 }   // namespace android

@@ -35,8 +35,10 @@
 #include <hwbinder/IPCThreadState.h>
 #include <hwbinder/Parcel.h>
 #include <hwbinder/ProcessState.h>
+#include <hwbinder/TextOutput.h>
 
 #include <cutils/ashmem.h>
+#include <utils/Debug.h>
 #include <utils/Log.h>
 #include <utils/misc.h>
 #include <utils/String8.h>
@@ -44,10 +46,6 @@
 
 #include "binder_kernel.h"
 #include <hwbinder/Static.h>
-#include "TextOutput.h"
-#include "Utils.h"
-
-#include <atomic>
 
 #define LOG_REFS(...)
 //#define LOG_REFS(...) ALOG(LOG_DEBUG, LOG_TAG, __VA_ARGS__)
@@ -76,8 +74,9 @@ static size_t pad_size(size_t s) {
 namespace android {
 namespace hardware {
 
-static std::atomic<size_t> gParcelGlobalAllocCount;
-static std::atomic<size_t> gParcelGlobalAllocSize;
+static pthread_mutex_t gParcelGlobalAllocSizeLock = PTHREAD_MUTEX_INITIALIZER;
+static size_t gParcelGlobalAllocSize = 0;
+static size_t gParcelGlobalAllocCount = 0;
 
 static size_t gMaxFds = 0;
 
@@ -262,11 +261,17 @@ Parcel::~Parcel()
 }
 
 size_t Parcel::getGlobalAllocSize() {
-    return gParcelGlobalAllocSize.load();
+    pthread_mutex_lock(&gParcelGlobalAllocSizeLock);
+    size_t size = gParcelGlobalAllocSize;
+    pthread_mutex_unlock(&gParcelGlobalAllocSizeLock);
+    return size;
 }
 
 size_t Parcel::getGlobalAllocCount() {
-    return gParcelGlobalAllocCount.load();
+    pthread_mutex_lock(&gParcelGlobalAllocSizeLock);
+    size_t count = gParcelGlobalAllocCount;
+    pthread_mutex_unlock(&gParcelGlobalAllocSizeLock);
+    return count;
 }
 
 const uint8_t* Parcel::data() const
@@ -354,11 +359,6 @@ status_t Parcel::setData(const uint8_t* buffer, size_t len)
         mFdsKnown = false;
     }
     return err;
-}
-
-void Parcel::markSensitive() const
-{
-    mDeallocZero = true;
 }
 
 // Write RPC headers.  (previously just the interface token)
@@ -470,7 +470,7 @@ void* Parcel::writeInplace(size_t len)
 
     const size_t padded = pad_size(len);
 
-    // validate for integer overflow
+    // sanity check for integer overflow
     if (mDataPos+padded < mDataPos) {
         return nullptr;
     }
@@ -889,6 +889,11 @@ status_t Parcel::writeEmbeddedNativeHandle(const native_handle_t *handle,
                                   parent_buffer_handle, parent_offset);
 }
 
+void Parcel::remove(size_t /*start*/, size_t /*amt*/)
+{
+    LOG_ALWAYS_FATAL("Parcel::remove() not yet implemented!");
+}
+
 status_t Parcel::read(void* outData, size_t len) const
 {
     if (len > INT32_MAX) {
@@ -927,7 +932,7 @@ const void* Parcel::readInplace(size_t len) const
 
 template<class T>
 status_t Parcel::readAligned(T *pArg) const {
-    static_assert(PAD_SIZE_UNSAFE(sizeof(T)) == sizeof(T));
+    COMPILE_TIME_ASSERT_FUNCTION_SCOPE(PAD_SIZE_UNSAFE(sizeof(T)) == sizeof(T));
 
     if ((mDataPos+sizeof(T)) <= mDataSize) {
         const void* data = mData+mDataPos;
@@ -951,7 +956,7 @@ T Parcel::readAligned() const {
 
 template<class T>
 status_t Parcel::writeAligned(T val) {
-    static_assert(PAD_SIZE_UNSAFE(sizeof(T)) == sizeof(T));
+    COMPILE_TIME_ASSERT_FUNCTION_SCOPE(PAD_SIZE_UNSAFE(sizeof(T)) == sizeof(T));
 
     if ((mDataPos+sizeof(val)) <= mDataCapacity) {
 restart_write:
@@ -1726,11 +1731,16 @@ void Parcel::freeDataNoInit()
         releaseObjects();
         if (mData) {
             LOG_ALLOC("Parcel %p: freeing with %zu capacity", this, mDataCapacity);
-            gParcelGlobalAllocSize -= mDataCapacity;
-            gParcelGlobalAllocCount--;
-            if (mDeallocZero) {
-                zeroMemory(mData, mDataSize);
+            pthread_mutex_lock(&gParcelGlobalAllocSizeLock);
+            if (mDataCapacity <= gParcelGlobalAllocSize) {
+              gParcelGlobalAllocSize = gParcelGlobalAllocSize - mDataCapacity;
+            } else {
+              gParcelGlobalAllocSize = 0;
             }
+            if (gParcelGlobalAllocCount > 0) {
+              gParcelGlobalAllocCount--;
+            }
+            pthread_mutex_unlock(&gParcelGlobalAllocSizeLock);
             free(mData);
         }
         if (mObjects) free(mObjects);
@@ -1750,21 +1760,6 @@ status_t Parcel::growData(size_t len)
     return continueWrite(newSize);
 }
 
-static uint8_t* reallocZeroFree(uint8_t* data, size_t oldCapacity, size_t newCapacity, bool zero) {
-    if (!zero) {
-        return (uint8_t*)realloc(data, newCapacity);
-    }
-    uint8_t* newData = (uint8_t*)malloc(newCapacity);
-    if (!newData) {
-        return nullptr;
-    }
-
-    memcpy(newData, data, std::min(oldCapacity, newCapacity));
-    zeroMemory(data, oldCapacity);
-    free(data);
-    return newData;
-}
-
 status_t Parcel::restartWrite(size_t desired)
 {
     if (desired > INT32_MAX) {
@@ -1778,7 +1773,7 @@ status_t Parcel::restartWrite(size_t desired)
         return continueWrite(desired);
     }
 
-    uint8_t* data = reallocZeroFree(mData, mDataCapacity, desired, mDeallocZero);
+    uint8_t* data = (uint8_t*)realloc(mData, desired);
     if (!data && desired > mDataCapacity) {
         mError = NO_MEMORY;
         return NO_MEMORY;
@@ -1786,17 +1781,15 @@ status_t Parcel::restartWrite(size_t desired)
 
     releaseObjects();
 
-    if (data || desired == 0) {
+    if (data) {
         LOG_ALLOC("Parcel %p: restart from %zu to %zu capacity", this, mDataCapacity, desired);
-        if (mDataCapacity > desired) {
-            gParcelGlobalAllocSize -= (mDataCapacity - desired);
-        } else {
-            gParcelGlobalAllocSize += (desired - mDataCapacity);
-        }
-
+        pthread_mutex_lock(&gParcelGlobalAllocSizeLock);
+        gParcelGlobalAllocSize += desired;
+        gParcelGlobalAllocSize -= mDataCapacity;
         if (!mData) {
             gParcelGlobalAllocCount++;
         }
+        pthread_mutex_unlock(&gParcelGlobalAllocSizeLock);
         mData = data;
         mDataCapacity = desired;
     }
@@ -1884,8 +1877,10 @@ status_t Parcel::continueWrite(size_t desired)
         mOwner = nullptr;
 
         LOG_ALLOC("Parcel %p: taking ownership of %zu capacity", this, desired);
+        pthread_mutex_lock(&gParcelGlobalAllocSizeLock);
         gParcelGlobalAllocSize += desired;
         gParcelGlobalAllocCount++;
+        pthread_mutex_unlock(&gParcelGlobalAllocSizeLock);
 
         mData = data;
         mObjects = objects;
@@ -1928,12 +1923,14 @@ status_t Parcel::continueWrite(size_t desired)
 
         // We own the data, so we can just do a realloc().
         if (desired > mDataCapacity) {
-            uint8_t* data = reallocZeroFree(mData, mDataCapacity, desired, mDeallocZero);
+            uint8_t* data = (uint8_t*)realloc(mData, desired);
             if (data) {
                 LOG_ALLOC("Parcel %p: continue from %zu to %zu capacity", this, mDataCapacity,
                         desired);
+                pthread_mutex_lock(&gParcelGlobalAllocSizeLock);
                 gParcelGlobalAllocSize += desired;
                 gParcelGlobalAllocSize -= mDataCapacity;
+                pthread_mutex_unlock(&gParcelGlobalAllocSizeLock);
                 mData = data;
                 mDataCapacity = desired;
             } else {
@@ -1965,8 +1962,10 @@ status_t Parcel::continueWrite(size_t desired)
         }
 
         LOG_ALLOC("Parcel %p: allocating with %zu capacity", this, desired);
+        pthread_mutex_lock(&gParcelGlobalAllocSizeLock);
         gParcelGlobalAllocSize += desired;
         gParcelGlobalAllocCount++;
+        pthread_mutex_unlock(&gParcelGlobalAllocSizeLock);
 
         mData = data;
         mDataSize = mDataPos = 0;
@@ -1995,7 +1994,6 @@ void Parcel::initState()
     mHasFds = false;
     mFdsKnown = true;
     mAllowFds = true;
-    mDeallocZero = false;
     mOwner = nullptr;
     clearCache();
 

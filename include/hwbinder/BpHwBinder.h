@@ -21,10 +21,6 @@
 #include <utils/KeyedVector.h>
 #include <utils/threads.h>
 
-// WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,
-// this means that it is only relevant to HIDL. Any AIDL- or libbinder-specific
-// code should not try to use these things.
-
 // ---------------------------------------------------------------------------
 namespace android {
 namespace hardware {
@@ -118,6 +114,7 @@ private:
             volatile int32_t    mObitsSent;
             Vector<Obituary>*   mObituaries;
             ObjectManager       mObjects;
+            Parcel*             mConstantData;
     mutable String16            mDescriptorCache;
 };
 
