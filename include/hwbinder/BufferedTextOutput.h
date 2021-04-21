@@ -17,8 +17,7 @@
 #ifndef ANDROID_HARDWARE_BUFFEREDTEXTOUTPUT_H
 #define ANDROID_HARDWARE_BUFFEREDTEXTOUTPUT_H
 
-#include "TextOutput.h"
-
+#include <hwbinder/TextOutput.h>
 #include <utils/threads.h>
 #include <sys/uio.h>
 
@@ -49,6 +48,9 @@ protected:
 private:
     struct BufferState;
     struct ThreadState;
+    
+    static  ThreadState*getThreadState();
+    static  void        threadDestructor(void *st);
     
             BufferState*getBuffer() const;
             
