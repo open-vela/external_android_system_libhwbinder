@@ -35,19 +35,22 @@
 #include <hwbinder/IPCThreadState.h>
 #include <hwbinder/Parcel.h>
 #include <hwbinder/ProcessState.h>
+#include <hwbinder/TextOutput.h>
+#include <hwbinder/binder_kernel.h>
 
 #include <cutils/ashmem.h>
+#include <utils/Debug.h>
 #include <utils/Log.h>
 #include <utils/misc.h>
 #include <utils/String8.h>
 #include <utils/String16.h>
 
-#include "binder_kernel.h"
+#include <private/binder/binder_module.h>
 #include <hwbinder/Static.h>
-#include "TextOutput.h"
-#include "Utils.h"
 
-#include <atomic>
+#ifndef INT32_MAX
+#define INT32_MAX ((int32_t)(2147483647))
+#endif
 
 #define LOG_REFS(...)
 //#define LOG_REFS(...) ALOG(LOG_DEBUG, LOG_TAG, __VA_ARGS__)
@@ -64,8 +67,8 @@
 #define PAD_SIZE_UNSAFE(s) (((s)+3)&~3)
 
 static size_t pad_size(size_t s) {
-    if (s > (std::numeric_limits<size_t>::max() - 3)) {
-        LOG_ALWAYS_FATAL("pad size too big %zu", s);
+    if (s > (SIZE_T_MAX - 3)) {
+        abort();
     }
     return PAD_SIZE_UNSAFE(s);
 }
@@ -73,18 +76,29 @@ static size_t pad_size(size_t s) {
 // Note: must be kept in sync with android/os/StrictMode.java's PENALTY_GATHER
 #define STRICT_MODE_PENALTY_GATHER (0x40 << 16)
 
+// XXX This can be made public if we want to provide
+// support for typed data.
+struct small_flat_data
+{
+    uint32_t type;
+    uint32_t data;
+};
+
 namespace android {
 namespace hardware {
 
-static std::atomic<size_t> gParcelGlobalAllocCount;
-static std::atomic<size_t> gParcelGlobalAllocSize;
+static pthread_mutex_t gParcelGlobalAllocSizeLock = PTHREAD_MUTEX_INITIALIZER;
+static size_t gParcelGlobalAllocSize = 0;
+static size_t gParcelGlobalAllocCount = 0;
 
 static size_t gMaxFds = 0;
+
+static const size_t PARCEL_REF_CAP = 1024;
 
 void acquire_binder_object(const sp<ProcessState>& proc,
     const flat_binder_object& obj, const void* who)
 {
-    switch (obj.hdr.type) {
+    switch (obj.type) {
         case BINDER_TYPE_BINDER:
             if (obj.binder) {
                 LOG_REFS("Parcel %p acquiring reference on local %p", who, obj.cookie);
@@ -97,7 +111,7 @@ void acquire_binder_object(const sp<ProcessState>& proc,
             return;
         case BINDER_TYPE_HANDLE: {
             const sp<IBinder> b = proc->getStrongProxyForHandle(obj.handle);
-            if (b != nullptr) {
+            if (b != NULL) {
                 LOG_REFS("Parcel %p acquiring reference on remote %p", who, b.get());
                 b->incStrong(who);
             }
@@ -105,12 +119,12 @@ void acquire_binder_object(const sp<ProcessState>& proc,
         }
         case BINDER_TYPE_WEAK_HANDLE: {
             const wp<IBinder> b = proc->getWeakProxyForHandle(obj.handle);
-            if (b != nullptr) b.get_refs()->incWeak(who);
+            if (b != NULL) b.get_refs()->incWeak(who);
             return;
         }
     }
 
-    ALOGD("Invalid object type 0x%08x", obj.hdr.type);
+    ALOGD("Invalid object type 0x%08x", obj.type);
 }
 
 void acquire_object(const sp<ProcessState>& proc, const binder_object_header& obj,
@@ -130,7 +144,7 @@ void acquire_object(const sp<ProcessState>& proc, const binder_object_header& ob
 void release_object(const sp<ProcessState>& proc,
     const flat_binder_object& obj, const void* who)
 {
-    switch (obj.hdr.type) {
+    switch (obj.type) {
         case BINDER_TYPE_BINDER:
             if (obj.binder) {
                 LOG_REFS("Parcel %p releasing reference on local %p", who, obj.cookie);
@@ -143,7 +157,7 @@ void release_object(const sp<ProcessState>& proc,
             return;
         case BINDER_TYPE_HANDLE: {
             const sp<IBinder> b = proc->getStrongProxyForHandle(obj.handle);
-            if (b != nullptr) {
+            if (b != NULL) {
                 LOG_REFS("Parcel %p releasing reference on remote %p", who, b.get());
                 b->decStrong(who);
             }
@@ -151,7 +165,7 @@ void release_object(const sp<ProcessState>& proc,
         }
         case BINDER_TYPE_WEAK_HANDLE: {
             const wp<IBinder> b = proc->getWeakProxyForHandle(obj.handle);
-            if (b != nullptr) b.get_refs()->decWeak(who);
+            if (b != NULL) b.get_refs()->decWeak(who);
             return;
         }
         case BINDER_TYPE_FD: {
@@ -170,7 +184,7 @@ void release_object(const sp<ProcessState>& proc,
         }
     }
 
-    ALOGE("Invalid object type 0x%08x", obj.hdr.type);
+    ALOGE("Invalid object type 0x%08x", obj.type);
 }
 
 inline static status_t finish_flatten_binder(
@@ -184,15 +198,15 @@ status_t flatten_binder(const sp<ProcessState>& /*proc*/,
 {
     flat_binder_object obj = {};
 
-    if (binder != nullptr) {
+    if (binder != NULL) {
         BHwBinder *local = binder->localBinder();
         if (!local) {
             BpHwBinder *proxy = binder->remoteBinder();
-            if (proxy == nullptr) {
+            if (proxy == NULL) {
                 ALOGE("null proxy");
             }
             const int32_t handle = proxy ? proxy->handle() : 0;
-            obj.hdr.type = BINDER_TYPE_HANDLE;
+            obj.type = BINDER_TYPE_HANDLE;
             obj.flags = FLAT_BINDER_FLAG_ACCEPTS_FDS;
             obj.binder = 0; /* Don't pass uninitialized stack data to a remote process */
             obj.handle = handle;
@@ -204,21 +218,70 @@ status_t flatten_binder(const sp<ProcessState>& /*proc*/,
 
             obj.flags = priority & FLAT_BINDER_FLAG_PRIORITY_MASK;
             obj.flags |= FLAT_BINDER_FLAG_ACCEPTS_FDS | FLAT_BINDER_FLAG_INHERIT_RT;
-            obj.flags |= (policy & 3) << FLAT_BINDER_FLAG_SCHED_POLICY_SHIFT;
+            obj.flags |= (policy & 3) << FLAT_BINDER_FLAG_SCHEDPOLICY_SHIFT;
             if (local->isRequestingSid()) {
                 obj.flags |= FLAT_BINDER_FLAG_TXN_SECURITY_CTX;
             }
-            obj.hdr.type = BINDER_TYPE_BINDER;
+            obj.type = BINDER_TYPE_BINDER;
             obj.binder = reinterpret_cast<uintptr_t>(local->getWeakRefs());
             obj.cookie = reinterpret_cast<uintptr_t>(local);
         }
     } else {
-        obj.hdr.type = BINDER_TYPE_BINDER;
+        obj.type = BINDER_TYPE_BINDER;
         obj.binder = 0;
         obj.cookie = 0;
     }
 
     return finish_flatten_binder(binder, obj, out);
+}
+
+status_t flatten_binder(const sp<ProcessState>& /*proc*/,
+    const wp<IBinder>& binder, Parcel* out)
+{
+    flat_binder_object obj = {};
+
+    obj.flags = 0x7f | FLAT_BINDER_FLAG_ACCEPTS_FDS;
+    if (binder != NULL) {
+        sp<IBinder> real = binder.promote();
+        if (real != NULL) {
+            IBinder *local = real->localBinder();
+            if (!local) {
+                BpHwBinder *proxy = real->remoteBinder();
+                if (proxy == NULL) {
+                    ALOGE("null proxy");
+                }
+                const int32_t handle = proxy ? proxy->handle() : 0;
+                obj.type = BINDER_TYPE_WEAK_HANDLE;
+                obj.binder = 0; /* Don't pass uninitialized stack data to a remote process */
+                obj.handle = handle;
+                obj.cookie = 0;
+            } else {
+                obj.type = BINDER_TYPE_WEAK_BINDER;
+                obj.binder = reinterpret_cast<uintptr_t>(binder.get_refs());
+                obj.cookie = reinterpret_cast<uintptr_t>(binder.unsafe_get());
+            }
+            return finish_flatten_binder(real, obj, out);
+        }
+
+        // XXX How to deal?  In order to flatten the given binder,
+        // we need to probe it for information, which requires a primary
+        // reference...  but we don't have one.
+        //
+        // The OpenBinder implementation uses a dynamic_cast<> here,
+        // but we can't do that with the different reference counting
+        // implementation we are using.
+        ALOGE("Unable to unflatten Binder weak reference!");
+        obj.type = BINDER_TYPE_BINDER;
+        obj.binder = 0;
+        obj.cookie = 0;
+        return finish_flatten_binder(NULL, obj, out);
+
+    } else {
+        obj.type = BINDER_TYPE_BINDER;
+        obj.binder = 0;
+        obj.cookie = 0;
+        return finish_flatten_binder(NULL, obj, out);
+    }
 }
 
 inline static status_t finish_unflatten_binder(
@@ -234,10 +297,10 @@ status_t unflatten_binder(const sp<ProcessState>& proc,
     const flat_binder_object* flat = in.readObject<flat_binder_object>();
 
     if (flat) {
-        switch (flat->hdr.type) {
+        switch (flat->type) {
             case BINDER_TYPE_BINDER:
                 *out = reinterpret_cast<IBinder*>(flat->cookie);
-                return finish_unflatten_binder(nullptr, *flat, in);
+                return finish_unflatten_binder(NULL, *flat, in);
             case BINDER_TYPE_HANDLE:
                 *out = proc->getStrongProxyForHandle(flat->handle);
                 return finish_unflatten_binder(
@@ -245,6 +308,46 @@ status_t unflatten_binder(const sp<ProcessState>& proc,
         }
     }
     return BAD_TYPE;
+}
+
+status_t unflatten_binder(const sp<ProcessState>& proc,
+    const Parcel& in, wp<IBinder>* out)
+{
+    const flat_binder_object* flat = in.readObject<flat_binder_object>();
+
+    if (flat) {
+        switch (flat->type) {
+            case BINDER_TYPE_BINDER:
+                *out = reinterpret_cast<IBinder*>(flat->cookie);
+                return finish_unflatten_binder(NULL, *flat, in);
+            case BINDER_TYPE_WEAK_BINDER:
+                if (flat->binder != 0) {
+                    out->set_object_and_refs(
+                        reinterpret_cast<IBinder*>(flat->cookie),
+                        reinterpret_cast<RefBase::weakref_type*>(flat->binder));
+                } else {
+                    *out = NULL;
+                }
+                return finish_unflatten_binder(NULL, *flat, in);
+            case BINDER_TYPE_HANDLE:
+            case BINDER_TYPE_WEAK_HANDLE:
+                *out = proc->getWeakProxyForHandle(flat->handle);
+                return finish_unflatten_binder(
+                    static_cast<BpHwBinder*>(out->unsafe_get()), *flat, in);
+        }
+    }
+    return BAD_TYPE;
+}
+
+/*
+ * Return true iff:
+ * 1. obj is indeed a binder_buffer_object (type is BINDER_TYPE_PTR), and
+ * 2. obj does NOT have the flag BINDER_BUFFER_REF (it is not a reference, but
+ *    an actual buffer.)
+ */
+static inline bool isBuffer(const binder_buffer_object& obj) {
+    return obj.hdr.type == BINDER_TYPE_PTR
+        && (obj.flags & BINDER_BUFFER_REF) == 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -262,11 +365,17 @@ Parcel::~Parcel()
 }
 
 size_t Parcel::getGlobalAllocSize() {
-    return gParcelGlobalAllocSize.load();
+    pthread_mutex_lock(&gParcelGlobalAllocSizeLock);
+    size_t size = gParcelGlobalAllocSize;
+    pthread_mutex_unlock(&gParcelGlobalAllocSizeLock);
+    return size;
 }
 
 size_t Parcel::getGlobalAllocCount() {
-    return gParcelGlobalAllocCount.load();
+    pthread_mutex_lock(&gParcelGlobalAllocSizeLock);
+    size_t count = gParcelGlobalAllocCount;
+    pthread_mutex_unlock(&gParcelGlobalAllocSizeLock);
+    return count;
 }
 
 const uint8_t* Parcel::data() const
@@ -283,7 +392,7 @@ size_t Parcel::dataAvail() const
 {
     size_t result = dataSize() - dataPosition();
     if (result > INT32_MAX) {
-        LOG_ALWAYS_FATAL("result too big: %zu", result);
+        abort();
     }
     return result;
 }
@@ -320,7 +429,7 @@ void Parcel::setDataPosition(size_t pos) const
     if (pos > INT32_MAX) {
         // don't accept size_t values which may have come from an
         // inadvertent conversion from a negative int.
-        LOG_ALWAYS_FATAL("pos too big: %zu", pos);
+        abort();
     }
 
     mDataPos = pos;
@@ -356,11 +465,6 @@ status_t Parcel::setData(const uint8_t* buffer, size_t len)
     return err;
 }
 
-void Parcel::markSensitive() const
-{
-    mDeallocZero = true;
-}
-
 // Write RPC headers.  (previously just the interface token)
 status_t Parcel::writeInterfaceToken(const char* interface)
 {
@@ -371,11 +475,11 @@ status_t Parcel::writeInterfaceToken(const char* interface)
 bool Parcel::enforceInterface(const char* interface) const
 {
     const char* str = readCString();
-    if (str != nullptr && strcmp(str, interface) == 0) {
+    if (strcmp(str, interface) == 0) {
         return true;
     } else {
         ALOGW("**** enforceInterface() expected '%s' but read '%s'",
-                interface, (str ? str : "<empty string>"));
+                String8(interface).string(), String8(str).string());
         return false;
     }
 }
@@ -465,14 +569,14 @@ void* Parcel::writeInplace(size_t len)
     if (len > INT32_MAX) {
         // don't accept size_t values which may have come from an
         // inadvertent conversion from a negative int.
-        return nullptr;
+        return NULL;
     }
 
     const size_t padded = pad_size(len);
 
-    // validate for integer overflow
+    // sanity check for integer overflow
     if (mDataPos+padded < mDataPos) {
-        return nullptr;
+        return NULL;
     }
 
     if ((mDataPos+padded) <= mDataCapacity) {
@@ -503,7 +607,7 @@ restart_write:
 
     status_t err = growData(padded);
     if (err == NO_ERROR) goto restart_write;
-    return nullptr;
+    return NULL;
 }
 
 status_t Parcel::writeInt8(int8_t val)
@@ -601,7 +705,7 @@ status_t Parcel::writeString16(const String16& str)
 
 status_t Parcel::writeString16(const char16_t* str, size_t len)
 {
-    if (str == nullptr) return writeInt32(-1);
+    if (str == NULL) return writeInt32(-1);
 
     status_t err = writeInt32(len);
     if (err == NO_ERROR) {
@@ -617,6 +721,11 @@ status_t Parcel::writeString16(const char16_t* str, size_t len)
     return err;
 }
 status_t Parcel::writeStrongBinder(const sp<IBinder>& val)
+{
+    return flatten_binder(ProcessState::self(), val, this);
+}
+
+status_t Parcel::writeWeakBinder(const wp<IBinder>& val)
 {
     return flatten_binder(ProcessState::self(), val, this);
 }
@@ -644,6 +753,7 @@ restart_write:
                 break;
             }
             case BINDER_TYPE_FD: {
+                const binder_fd_object *fd_obj = reinterpret_cast<const binder_fd_object*>(hdr);
                 // remember if it's a file descriptor
                 if (!mAllowFds) {
                     // fail before modifying our object index
@@ -677,12 +787,10 @@ restart_write:
         if (err != NO_ERROR) return err;
     }
     if (!enoughObjects) {
-        if (mObjectsSize > SIZE_MAX - 2) return NO_MEMORY; // overflow
-        if (mObjectsSize + 2 > SIZE_MAX / 3) return NO_MEMORY; // overflow
         size_t newSize = ((mObjectsSize+2)*3)/2;
-        if (newSize > SIZE_MAX / sizeof(binder_size_t)) return NO_MEMORY; // overflow
+        if (newSize * sizeof(binder_size_t) < mObjectsSize) return NO_MEMORY;   // overflow
         binder_size_t* objects = (binder_size_t*)realloc(mObjects, newSize*sizeof(binder_size_t));
-        if (objects == nullptr) return NO_MEMORY;
+        if (objects == NULL) return NO_MEMORY;
         mObjects = objects;
         mObjectsCapacity = newSize;
     }
@@ -695,15 +803,19 @@ template status_t Parcel::writeObject<binder_fd_object>(const binder_fd_object& 
 template status_t Parcel::writeObject<binder_buffer_object>(const binder_buffer_object& val);
 template status_t Parcel::writeObject<binder_fd_array_object>(const binder_fd_array_object& val);
 
+
+// TODO merge duplicated code in writeEmbeddedBuffer, writeEmbeddedReference, and writeEmbeddedNullReference
+// TODO merge duplicated code in writeBuffer, writeReference, and writeNullReference
+
 bool Parcel::validateBufferChild(size_t child_buffer_handle,
                                  size_t child_offset) const {
     if (child_buffer_handle >= mObjectsSize)
         return false;
     binder_buffer_object *child = reinterpret_cast<binder_buffer_object*>
             (mData + mObjects[child_buffer_handle]);
-    if (child->hdr.type != BINDER_TYPE_PTR || child_offset > child->length) {
+    if (!isBuffer(*child) || child_offset > child->length) {
         // Parent object not a buffer, or not large enough
-        LOG_BUFFER("writeEmbeddedReference found weird child. "
+        LOG_BUFFER("writeEmbeddedReference found wierd child. "
                    "child_offset = %zu, child->length = %zu",
                    child_offset, (size_t)child->length);
         return false;
@@ -717,7 +829,7 @@ bool Parcel::validateBufferParent(size_t parent_buffer_handle,
         return false;
     binder_buffer_object *parent = reinterpret_cast<binder_buffer_object*>
             (mData + mObjects[parent_buffer_handle]);
-    if (parent->hdr.type != BINDER_TYPE_PTR ||
+    if (!isBuffer(*parent) ||
             sizeof(binder_uintptr_t) > parent->length ||
             parent_offset > parent->length - sizeof(binder_uintptr_t)) {
         // Parent object not a buffer, or not large enough
@@ -735,9 +847,9 @@ status_t Parcel::writeEmbeddedBuffer(
         return BAD_VALUE;
     binder_buffer_object obj = {
         .hdr = { .type = BINDER_TYPE_PTR },
-        .flags = BINDER_BUFFER_FLAG_HAS_PARENT,
         .buffer = reinterpret_cast<binder_uintptr_t>(buffer),
         .length = length,
+        .flags = BINDER_BUFFER_HAS_PARENT,
         .parent = parent_buffer_handle,
         .parent_offset = parent_offset,
     };
@@ -754,9 +866,111 @@ status_t Parcel::writeBuffer(const void *buffer, size_t length, size_t *handle)
         buffer, length, mObjectsSize);
     binder_buffer_object obj {
         .hdr = { .type = BINDER_TYPE_PTR },
-        .flags = 0,
         .buffer = reinterpret_cast<binder_uintptr_t>(buffer),
         .length = length,
+        .flags = 0,
+    };
+    if (handle != nullptr) {
+        // We use an index into mObjects as a handle
+        *handle = mObjectsSize;
+    }
+    return writeObject(obj);
+}
+
+status_t Parcel::incrementNumReferences() {
+    ++mNumRef;
+    LOG_BUFFER("incrementNumReferences: %zu", mNumRef);
+    return mNumRef <= PARCEL_REF_CAP ? OK : NO_MEMORY;
+}
+
+status_t Parcel::writeReference(size_t *handle,
+        size_t child_buffer_handle, size_t child_offset) {
+    LOG_BUFFER("writeReference(child = (%zu, %zu)) -> %zu",
+        child_buffer_handle, child_offset,
+        mObjectsSize);
+    status_t status = incrementNumReferences();
+    if (status != OK)
+        return status;
+    if (!validateBufferChild(child_buffer_handle, child_offset))
+        return BAD_VALUE;
+    binder_buffer_object obj {
+        .hdr = { .type = BINDER_TYPE_PTR },
+        .flags = BINDER_BUFFER_REF,
+        // The current binder.h does not have child and child_offset names yet.
+        // Use the buffer and length parameters.
+        .child = child_buffer_handle,
+        .child_offset = child_offset,
+    };
+    if (handle != nullptr)
+        // We use an index into mObjects as a handle
+        *handle = mObjectsSize;
+    return writeObject(obj);
+}
+
+/* Write an object that describes a pointer from parent to child.
+ * Output the handle of that object in the size_t *handle variable. */
+status_t Parcel::writeEmbeddedReference(size_t *handle,
+    size_t child_buffer_handle, size_t child_offset,
+    size_t parent_buffer_handle, size_t parent_offset) {
+    LOG_BUFFER("writeEmbeddedReference(child = (%zu, %zu), parent = (%zu, %zu)) -> %zu",
+        child_buffer_handle, child_offset,
+        parent_buffer_handle, parent_offset,
+        mObjectsSize);
+    status_t status = incrementNumReferences();
+    if (status != OK)
+        return status;
+    // The current binder.h does not have child and child_offset names yet.
+    // Use the buffer and length parameters.
+    if (!validateBufferChild(child_buffer_handle, child_offset))
+        return BAD_VALUE;
+    binder_buffer_object obj {
+        .hdr = { .type = BINDER_TYPE_PTR },
+        .flags = BINDER_BUFFER_REF | BINDER_BUFFER_HAS_PARENT,
+        .child = child_buffer_handle,
+        .child_offset = child_offset,
+        .parent = parent_buffer_handle,
+        .parent_offset = parent_offset,
+    };
+    if (handle != nullptr) {
+        // We use an index into mObjects as a handle
+        *handle = mObjectsSize;
+    }
+    return writeObject(obj);
+}
+
+status_t Parcel::writeNullReference(size_t * handle) {
+    LOG_BUFFER("writeNullReference -> %zu", mObjectsSize);
+    status_t status = incrementNumReferences();
+    if (status != OK)
+        return status;
+
+    binder_buffer_object obj {
+        .hdr = { .type = BINDER_TYPE_PTR },
+        .flags = BINDER_BUFFER_REF,
+    };
+
+    if (handle != nullptr)
+        // We use an index into mObjects as a handle
+        *handle = mObjectsSize;
+    return writeObject(obj);
+}
+
+status_t Parcel::writeEmbeddedNullReference(size_t * handle,
+        size_t parent_buffer_handle, size_t parent_offset) {
+    LOG_BUFFER("writeEmbeddedNullReference(parent = (%zu, %zu)) -> %zu",
+        parent_buffer_handle,
+        parent_offset,
+        mObjectsSize);
+    status_t status = incrementNumReferences();
+    if (status != OK)
+        return status;
+    if(!validateBufferParent(parent_buffer_handle, parent_offset))
+        return BAD_VALUE;
+    binder_buffer_object obj {
+        .hdr = { .type = BINDER_TYPE_PTR, },
+        .flags = BINDER_BUFFER_REF | BINDER_BUFFER_HAS_PARENT,
+        .parent = parent_buffer_handle,
+        .parent_offset = parent_offset,
     };
     if (handle != nullptr) {
         // We use an index into mObjects as a handle
@@ -779,7 +993,7 @@ void Parcel::updateCache() const {
         binder_size_t dataPos = mObjects[i];
         binder_buffer_object *obj =
             reinterpret_cast<binder_buffer_object*>(mData+dataPos);
-        if(obj->hdr.type != BINDER_TYPE_PTR)
+        if(!isBuffer(*obj))
             continue;
         BufferInfo ifo;
         ifo.index = i;
@@ -844,6 +1058,7 @@ status_t Parcel::writeNativeHandleNoDup(const native_handle_t *handle,
 {
     size_t buffer_handle;
     status_t status = OK;
+    uint32_t flags = 0;
 
     if (handle == nullptr) {
         status = writeUint64(0);
@@ -889,6 +1104,11 @@ status_t Parcel::writeEmbeddedNativeHandle(const native_handle_t *handle,
                                   parent_buffer_handle, parent_offset);
 }
 
+void Parcel::remove(size_t /*start*/, size_t /*amt*/)
+{
+    LOG_ALWAYS_FATAL("Parcel::remove() not yet implemented!");
+}
+
 status_t Parcel::read(void* outData, size_t len) const
 {
     if (len > INT32_MAX) {
@@ -912,7 +1132,7 @@ const void* Parcel::readInplace(size_t len) const
     if (len > INT32_MAX) {
         // don't accept size_t values which may have come from an
         // inadvertent conversion from a negative int.
-        return nullptr;
+        return NULL;
     }
 
     if ((mDataPos+pad_size(len)) >= mDataPos && (mDataPos+pad_size(len)) <= mDataSize
@@ -922,12 +1142,12 @@ const void* Parcel::readInplace(size_t len) const
         ALOGV("readInplace Setting data pos of %p to %zu", this, mDataPos);
         return data;
     }
-    return nullptr;
+    return NULL;
 }
 
 template<class T>
 status_t Parcel::readAligned(T *pArg) const {
-    static_assert(PAD_SIZE_UNSAFE(sizeof(T)) == sizeof(T));
+    COMPILE_TIME_ASSERT_FUNCTION_SCOPE(PAD_SIZE_UNSAFE(sizeof(T)) == sizeof(T));
 
     if ((mDataPos+sizeof(T)) <= mDataSize) {
         const void* data = mData+mDataPos;
@@ -951,7 +1171,7 @@ T Parcel::readAligned() const {
 
 template<class T>
 status_t Parcel::writeAligned(T val) {
-    static_assert(PAD_SIZE_UNSAFE(sizeof(T)) == sizeof(T));
+    COMPILE_TIME_ASSERT_FUNCTION_SCOPE(PAD_SIZE_UNSAFE(sizeof(T)) == sizeof(T));
 
     if ((mDataPos+sizeof(val)) <= mDataCapacity) {
 restart_write:
@@ -1124,7 +1344,7 @@ const char* Parcel::readCString() const
             return str;
         }
     }
-    return nullptr;
+    return NULL;
 }
 String16 Parcel::readString16() const
 {
@@ -1178,12 +1398,12 @@ const char16_t* Parcel::readString16Inplace(size_t* outLen) const
     if (size >= 0 && size < INT32_MAX) {
         *outLen = size;
         const char16_t* str = (const char16_t*)readInplace((size+1)*sizeof(char16_t));
-        if (str != nullptr) {
+        if (str != NULL) {
             return str;
         }
     }
     *outLen = 0;
-    return nullptr;
+    return NULL;
 }
 status_t Parcel::readStrongBinder(sp<IBinder>* val) const
 {
@@ -1206,6 +1426,13 @@ sp<IBinder> Parcel::readStrongBinder() const
     // method, and that code has historically been ok with getting nullptr
     // back (while ignoring error codes).
     readNullableStrongBinder(&val);
+    return val;
+}
+
+wp<IBinder> Parcel::readWeakBinder() const
+{
+    wp<IBinder> val;
+    unflatten_binder(ProcessState::self(), *this, &val);
     return val;
 }
 
@@ -1301,7 +1528,7 @@ const T* Parcel::readObject(size_t *objects_offset) const
         ALOGW("Attempt to read object from Parcel %p at offset %zu that is not in the object list",
              this, DPOS);
     }
-    return nullptr;
+    return NULL;
 }
 
 template const flat_binder_object* Parcel::readObject<flat_binder_object>(size_t *objects_offset) const;
@@ -1326,7 +1553,7 @@ bool Parcel::verifyBufferObject(const binder_buffer_object *buffer_obj,
         return false;
     }
 
-    if (flags & BINDER_BUFFER_FLAG_HAS_PARENT) {
+    if (flags & BINDER_BUFFER_HAS_PARENT) {
         if (buffer_obj->parent != parent) {
             ALOGE("Buffer parent %" PRIu64 " does not match expected parent %zu.",
                   static_cast<uint64_t>(buffer_obj->parent), parent);
@@ -1359,9 +1586,11 @@ status_t Parcel::readBuffer(size_t buffer_size, size_t *buffer_handle,
                             uint32_t flags, size_t parent, size_t parentOffset,
                             const void **buffer_out) const {
 
+    status_t status = OK;
+
     const binder_buffer_object* buffer_obj = readObject<binder_buffer_object>(buffer_handle);
 
-    if (buffer_obj == nullptr || buffer_obj->hdr.type != BINDER_TYPE_PTR) {
+    if (buffer_obj == nullptr || !isBuffer(*buffer_obj)) {
         return BAD_VALUE;
     }
 
@@ -1415,8 +1644,50 @@ status_t Parcel::readNullableEmbeddedBuffer(size_t buffer_size,
                                             size_t parent_offset,
                                             const void **buffer_out) const
 {
-    return readBuffer(buffer_size, buffer_handle, BINDER_BUFFER_FLAG_HAS_PARENT,
+    return readBuffer(buffer_size, buffer_handle, BINDER_BUFFER_HAS_PARENT,
                       parent_buffer_handle, parent_offset, buffer_out);
+}
+
+// isRef if corresponds to a writeReference call, else corresponds to a writeBuffer call.
+// see ::android::hardware::writeReferenceToParcel for details.
+status_t Parcel::readReference(void const* *bufptr,
+                               size_t *buffer_handle, bool *isRef) const
+{
+    LOG_BUFFER("readReference");
+    const binder_buffer_object* buffer_obj = readObject<binder_buffer_object>();
+    LOG_BUFFER("    readReference: buf = %p, len = %zu, flags = %x",
+        (void*)buffer_obj->buffer, (size_t)buffer_obj->length,
+        (int)buffer_obj->flags);
+    // TODO need verification here
+    if (buffer_obj && buffer_obj->hdr.type == BINDER_TYPE_PTR) {
+        if (buffer_handle != nullptr) {
+            *buffer_handle = 0; // TODO fix this, as readBuffer would do
+        }
+        if(isRef != nullptr) {
+            *isRef = (buffer_obj->flags & BINDER_BUFFER_REF) != 0;
+            LOG_BUFFER("    readReference: isRef = %d", *isRef);
+        }
+        // in read side, always use .buffer and .length.
+        if(bufptr != nullptr) {
+            *bufptr = (void*)buffer_obj->buffer;
+        }
+        return OK;
+    }
+
+    return BAD_VALUE;
+}
+
+// isRef if corresponds to a writeEmbeddedReference call, else corresponds to a writeEmbeddedBuffer call.
+// see ::android::hardware::writeEmbeddedReferenceToParcel for details.
+status_t Parcel::readEmbeddedReference(void const* *bufptr,
+                                       size_t *buffer_handle,
+                                       size_t /* parent_buffer_handle */,
+                                       size_t /* parent_offset */,
+                                       bool *isRef) const
+{
+    // TODO verify parent and offset
+    LOG_BUFFER("readEmbeddedReference");
+    return (readReference(bufptr, buffer_handle, isRef));
 }
 
 status_t Parcel::readEmbeddedNativeHandle(size_t parent_buffer_handle,
@@ -1481,12 +1752,6 @@ status_t Parcel::readNullableNativeHandleNoDup(const native_handle_t **handle,
 
     if (status != OK) {
         return status;
-    }
-
-    if (*handle == nullptr) {
-        // null handle already read above
-        ALOGE("Expecting non-null handle buffer");
-        return BAD_VALUE;
     }
 
     int numFds = (*handle)->numFds;
@@ -1564,7 +1829,7 @@ void Parcel::closeFileDescriptors()
         i--;
         const flat_binder_object* flat
             = reinterpret_cast<flat_binder_object*>(mData+mObjects[i]);
-        if (flat->hdr.type == BINDER_TYPE_FD) {
+        if (flat->type == BINDER_TYPE_FD) {
             //ALOGI("Closing fd: %ld", flat->handle);
             close(flat->handle);
         }
@@ -1601,7 +1866,7 @@ size_t Parcel::ipcBufferSize() const
         i--;
         const binder_buffer_object* buffer
             = reinterpret_cast<binder_buffer_object*>(mData+mObjects[i]);
-        if (buffer->hdr.type == BINDER_TYPE_PTR) {
+        if (isBuffer(*buffer)) {
             /* The binder kernel driver requires each buffer to be 8-byte
              * aligned */
             size_t alignedSize = (buffer->length + (BUFFER_ALIGNMENT_BYTES - 1))
@@ -1631,6 +1896,7 @@ void Parcel::ipcSetDataReference(const uint8_t* data, size_t dataSize,
     mObjectsSize = mObjectsCapacity = objectsCount;
     mNextObjectHint = 0;
     clearCache();
+    mNumRef = 0;
     mOwner = relFunc;
     mOwnerCookie = relCookie;
     for (size_t i = 0; i < mObjectsSize; i++) {
@@ -1661,16 +1927,20 @@ void Parcel::print(TextOutput& to, uint32_t /*flags*/) const
         for (size_t i=0; i<N; i++) {
             const flat_binder_object* flat
                 = reinterpret_cast<const flat_binder_object*>(DATA+OBJS[i]);
-            if (flat->hdr.type == BINDER_TYPE_PTR) {
+            if (flat->type == BINDER_TYPE_PTR) {
                 const binder_buffer_object* buffer
                     = reinterpret_cast<const binder_buffer_object*>(DATA+OBJS[i]);
-                HexDump bufferDump((const uint8_t*)buffer->buffer, (size_t)buffer->length);
-                bufferDump.setSingleLineCutoff(0);
-                to << endl << "Object #" << i << " @ " << (void*)OBJS[i] << " (buffer size " << buffer->length << "):";
-                to << indent << bufferDump << dedent;
+                if(isBuffer(*buffer)) {
+                    HexDump bufferDump((const uint8_t*)buffer->buffer, (size_t)buffer->length);
+                    bufferDump.setSingleLineCutoff(0);
+                    to << endl << "Object #" << i << " @ " << (void*)OBJS[i] << " (buffer size " << buffer->length << "):";
+                    to << indent << bufferDump << dedent;
+                } else {
+                    to << endl << "Object #" << i << " @ " << (void*)OBJS[i];
+                }
             } else {
                 to << endl << "Object #" << i << " @ " << (void*)OBJS[i] << ": "
-                    << TypeCode(flat->hdr.type & 0x7f7f7f00)
+                    << TypeCode(flat->type & 0x7f7f7f00)
                     << " = " << flat->binder;
             }
         }
@@ -1726,11 +1996,16 @@ void Parcel::freeDataNoInit()
         releaseObjects();
         if (mData) {
             LOG_ALLOC("Parcel %p: freeing with %zu capacity", this, mDataCapacity);
-            gParcelGlobalAllocSize -= mDataCapacity;
-            gParcelGlobalAllocCount--;
-            if (mDeallocZero) {
-                zeroMemory(mData, mDataSize);
+            pthread_mutex_lock(&gParcelGlobalAllocSizeLock);
+            if (mDataCapacity <= gParcelGlobalAllocSize) {
+              gParcelGlobalAllocSize = gParcelGlobalAllocSize - mDataCapacity;
+            } else {
+              gParcelGlobalAllocSize = 0;
             }
+            if (gParcelGlobalAllocCount > 0) {
+              gParcelGlobalAllocCount--;
+            }
+            pthread_mutex_unlock(&gParcelGlobalAllocSizeLock);
             free(mData);
         }
         if (mObjects) free(mObjects);
@@ -1744,25 +2019,11 @@ status_t Parcel::growData(size_t len)
         // inadvertent conversion from a negative int.
         return BAD_VALUE;
     }
-    if (len > SIZE_MAX - mDataSize) return NO_MEMORY; // overflow
-    if (mDataSize + len > SIZE_MAX / 3) return NO_MEMORY; // overflow
+
     size_t newSize = ((mDataSize+len)*3)/2;
-    return continueWrite(newSize);
-}
-
-static uint8_t* reallocZeroFree(uint8_t* data, size_t oldCapacity, size_t newCapacity, bool zero) {
-    if (!zero) {
-        return (uint8_t*)realloc(data, newCapacity);
-    }
-    uint8_t* newData = (uint8_t*)malloc(newCapacity);
-    if (!newData) {
-        return nullptr;
-    }
-
-    memcpy(newData, data, std::min(oldCapacity, newCapacity));
-    zeroMemory(data, oldCapacity);
-    free(data);
-    return newData;
+    return (newSize <= mDataSize)
+            ? (status_t) NO_MEMORY
+            : continueWrite(newSize);
 }
 
 status_t Parcel::restartWrite(size_t desired)
@@ -1778,7 +2039,7 @@ status_t Parcel::restartWrite(size_t desired)
         return continueWrite(desired);
     }
 
-    uint8_t* data = reallocZeroFree(mData, mDataCapacity, desired, mDeallocZero);
+    uint8_t* data = (uint8_t*)realloc(mData, desired);
     if (!data && desired > mDataCapacity) {
         mError = NO_MEMORY;
         return NO_MEMORY;
@@ -1786,17 +2047,15 @@ status_t Parcel::restartWrite(size_t desired)
 
     releaseObjects();
 
-    if (data || desired == 0) {
+    if (data) {
         LOG_ALLOC("Parcel %p: restart from %zu to %zu capacity", this, mDataCapacity, desired);
-        if (mDataCapacity > desired) {
-            gParcelGlobalAllocSize -= (mDataCapacity - desired);
-        } else {
-            gParcelGlobalAllocSize += (desired - mDataCapacity);
-        }
-
+        pthread_mutex_lock(&gParcelGlobalAllocSizeLock);
+        gParcelGlobalAllocSize += desired;
+        gParcelGlobalAllocSize -= mDataCapacity;
         if (!mData) {
             gParcelGlobalAllocCount++;
         }
+        pthread_mutex_unlock(&gParcelGlobalAllocSizeLock);
         mData = data;
         mDataCapacity = desired;
     }
@@ -1806,11 +2065,12 @@ status_t Parcel::restartWrite(size_t desired)
     ALOGV("restartWrite Setting data pos of %p to %zu", this, mDataPos);
 
     free(mObjects);
-    mObjects = nullptr;
+    mObjects = NULL;
     mObjectsSize = mObjectsCapacity = 0;
     mNextObjectHint = 0;
     mHasFds = false;
     clearCache();
+    mNumRef = 0;
     mFdsKnown = true;
     mAllowFds = true;
 
@@ -1854,7 +2114,7 @@ status_t Parcel::continueWrite(size_t desired)
             mError = NO_MEMORY;
             return NO_MEMORY;
         }
-        binder_size_t* objects = nullptr;
+        binder_size_t* objects = NULL;
 
         if (objectsSize) {
             objects = (binder_size_t*)calloc(objectsSize, sizeof(binder_size_t));
@@ -1881,11 +2141,13 @@ status_t Parcel::continueWrite(size_t desired)
         }
         //ALOGI("Freeing data ref of %p (pid=%d)", this, getpid());
         mOwner(this, mData, mDataSize, mObjects, mObjectsSize, mOwnerCookie);
-        mOwner = nullptr;
+        mOwner = NULL;
 
         LOG_ALLOC("Parcel %p: taking ownership of %zu capacity", this, desired);
+        pthread_mutex_lock(&gParcelGlobalAllocSizeLock);
         gParcelGlobalAllocSize += desired;
         gParcelGlobalAllocCount++;
+        pthread_mutex_unlock(&gParcelGlobalAllocSizeLock);
 
         mData = data;
         mObjects = objects;
@@ -1903,22 +2165,16 @@ status_t Parcel::continueWrite(size_t desired)
             for (size_t i=objectsSize; i<mObjectsSize; i++) {
                 const flat_binder_object* flat
                     = reinterpret_cast<flat_binder_object*>(mData+mObjects[i]);
-                if (flat->hdr.type == BINDER_TYPE_FD) {
+                if (flat->type == BINDER_TYPE_FD) {
                     // will need to rescan because we may have lopped off the only FDs
                     mFdsKnown = false;
                 }
                 release_object(proc, *flat, this);
             }
-
-            if (objectsSize == 0) {
-                free(mObjects);
-                mObjects = nullptr;
-            } else {
-                binder_size_t* objects =
-                    (binder_size_t*)realloc(mObjects, objectsSize*sizeof(binder_size_t));
-                if (objects) {
-                    mObjects = objects;
-                }
+            binder_size_t* objects =
+                (binder_size_t*)realloc(mObjects, objectsSize*sizeof(binder_size_t));
+            if (objects) {
+                mObjects = objects;
             }
             mObjectsSize = objectsSize;
             mNextObjectHint = 0;
@@ -1928,15 +2184,17 @@ status_t Parcel::continueWrite(size_t desired)
 
         // We own the data, so we can just do a realloc().
         if (desired > mDataCapacity) {
-            uint8_t* data = reallocZeroFree(mData, mDataCapacity, desired, mDeallocZero);
+            uint8_t* data = (uint8_t*)realloc(mData, desired);
             if (data) {
                 LOG_ALLOC("Parcel %p: continue from %zu to %zu capacity", this, mDataCapacity,
                         desired);
+                pthread_mutex_lock(&gParcelGlobalAllocSizeLock);
                 gParcelGlobalAllocSize += desired;
                 gParcelGlobalAllocSize -= mDataCapacity;
+                pthread_mutex_unlock(&gParcelGlobalAllocSizeLock);
                 mData = data;
                 mDataCapacity = desired;
-            } else {
+            } else if (desired > mDataCapacity) {
                 mError = NO_MEMORY;
                 return NO_MEMORY;
             }
@@ -1959,14 +2217,16 @@ status_t Parcel::continueWrite(size_t desired)
             return NO_MEMORY;
         }
 
-        if(!(mDataCapacity == 0 && mObjects == nullptr
+        if(!(mDataCapacity == 0 && mObjects == NULL
              && mObjectsCapacity == 0)) {
             ALOGE("continueWrite: %zu/%p/%zu/%zu", mDataCapacity, mObjects, mObjectsCapacity, desired);
         }
 
         LOG_ALLOC("Parcel %p: allocating with %zu capacity", this, desired);
+        pthread_mutex_lock(&gParcelGlobalAllocSizeLock);
         gParcelGlobalAllocSize += desired;
         gParcelGlobalAllocCount++;
+        pthread_mutex_unlock(&gParcelGlobalAllocSizeLock);
 
         mData = data;
         mDataSize = mDataPos = 0;
@@ -1982,22 +2242,22 @@ void Parcel::initState()
 {
     LOG_ALLOC("Parcel %p: initState", this);
     mError = NO_ERROR;
-    mData = nullptr;
+    mData = 0;
     mDataSize = 0;
     mDataCapacity = 0;
     mDataPos = 0;
     ALOGV("initState Setting data size of %p to %zu", this, mDataSize);
     ALOGV("initState Setting data pos of %p to %zu", this, mDataPos);
-    mObjects = nullptr;
+    mObjects = NULL;
     mObjectsSize = 0;
     mObjectsCapacity = 0;
     mNextObjectHint = 0;
     mHasFds = false;
     mFdsKnown = true;
     mAllowFds = true;
-    mDeallocZero = false;
-    mOwner = nullptr;
+    mOwner = NULL;
     clearCache();
+    mNumRef = 0;
 
     // racing multiple init leads only to multiple identical write
     if (gMaxFds == 0) {
@@ -2018,7 +2278,7 @@ void Parcel::scanForFds() const
     for (size_t i=0; i<mObjectsSize; i++) {
         const flat_binder_object* flat
             = reinterpret_cast<const flat_binder_object*>(mData + mObjects[i]);
-        if (flat->hdr.type == BINDER_TYPE_FD) {
+        if (flat->type == BINDER_TYPE_FD) {
             hasFds = true;
             break;
         }
@@ -2027,5 +2287,5 @@ void Parcel::scanForFds() const
     mFdsKnown = true;
 }
 
-} // namespace hardware
-} // namespace android
+}; // namespace hardware
+}; // namespace android

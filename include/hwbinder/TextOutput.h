@@ -39,7 +39,7 @@ public:
     
     class Bundle {
     public:
-        inline explicit Bundle(TextOutput& to) : mTO(to) { to.pushBundle(); }
+        inline Bundle(TextOutput& to) : mTO(to) { to.pushBundle(); }
         inline ~Bundle() { mTO.popBundle(); }
     private:
         TextOutput&     mTO;
@@ -53,6 +53,12 @@ public:
 
 // Text output stream for printing to the log (via utils/Log.h).
 extern TextOutput& alog;
+
+// Text output stream for printing to stdout.
+extern TextOutput& aout;
+
+// Text output stream for printing to stderr.
+extern TextOutput& aerr;
 
 typedef TextOutput& (*TextOutputManipFunc)(TextOutput&);
 
@@ -75,7 +81,7 @@ TextOutput& operator<<(TextOutput& to, TextOutputManipFunc func);
 class TypeCode
 {
 public:
-    inline explicit TypeCode(uint32_t code);
+    inline TypeCode(uint32_t code);
     inline ~TypeCode();
 
     inline uint32_t typeCode() const;
@@ -194,7 +200,7 @@ inline size_t HexDump::alignment() const { return mAlignment; }
 inline bool HexDump::carrayStyle() const { return mCArrayStyle; }
 
 // ---------------------------------------------------------------------------
-} // namespace hardware
-} // namespace android
+}; // namespace hardware
+}; // namespace android
 
 #endif // ANDROID_HARDWARE_TEXTOUTPUT_H

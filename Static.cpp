@@ -19,8 +19,7 @@
 
 #include <hwbinder/Static.h>
 
-#include "BufferedTextOutput.h"
-
+#include <hwbinder/BufferedTextOutput.h>
 #include <hwbinder/IPCThreadState.h>
 #include <utils/Log.h>
 
@@ -47,8 +46,50 @@ protected:
     }
 };
 
+class FdTextOutput : public BufferedTextOutput
+{
+public:
+    explicit FdTextOutput(int fd) : BufferedTextOutput(MULTITHREADED), mFD(fd) { }
+    virtual ~FdTextOutput() { };
+
+protected:
+    virtual status_t writeLines(const struct iovec& vec, size_t N)
+    {
+        writev(mFD, &vec, N);
+        return NO_ERROR;
+    }
+
+private:
+    int mFD;
+};
+
 static LogTextOutput gLogTextOutput;
+static FdTextOutput gStdoutTextOutput(STDOUT_FILENO);
+static FdTextOutput gStderrTextOutput(STDERR_FILENO);
+
 TextOutput& alog(gLogTextOutput);
+TextOutput& aout(gStdoutTextOutput);
+TextOutput& aerr(gStderrTextOutput);
+
+// ------------ ProcessState.cpp
+
+Mutex gProcessMutex;
+sp<ProcessState> gProcess;
+
+class LibHwbinderIPCtStatics
+{
+public:
+    LibHwbinderIPCtStatics()
+    {
+    }
+    
+    ~LibHwbinderIPCtStatics()
+    {
+        IPCThreadState::shutdown();
+    }
+};
+
+static LibHwbinderIPCtStatics gIPCStatics;
 
 }   // namespace hardware
 }   // namespace android
