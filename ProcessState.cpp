@@ -347,7 +347,7 @@ status_t ProcessState::setThreadPoolConfiguration(size_t maxThreads, bool caller
 status_t ProcessState::enableOnewaySpamDetection(bool enable) {
     uint32_t enableDetection = enable ? 1 : 0;
     if (ioctl(mDriverFD, BINDER_ENABLE_ONEWAY_SPAM_DETECTION, &enableDetection) == -1) {
-        ALOGE("Binder ioctl to enable oneway spam detection failed: %s", strerror(errno));
+        ALOGI("Binder ioctl to enable oneway spam detection failed: %s", strerror(errno));
         return -errno;
     }
     return NO_ERROR;
@@ -385,7 +385,7 @@ static int open_driver()
         uint32_t enable = DEFAULT_ENABLE_ONEWAY_SPAM_DETECTION;
         result = ioctl(fd, BINDER_ENABLE_ONEWAY_SPAM_DETECTION, &enable);
         if (result == -1) {
-            ALOGE("Binder ioctl to enable oneway spam detection failed: %s", strerror(errno));
+            ALOGI("Binder ioctl to enable oneway spam detection failed: %s", strerror(errno));
         }
     } else {
         ALOGW("Opening '/dev/hwbinder' failed: %s\n", strerror(errno));
