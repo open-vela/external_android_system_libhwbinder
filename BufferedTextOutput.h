@@ -17,7 +17,8 @@
 #ifndef ANDROID_HARDWARE_BUFFEREDTEXTOUTPUT_H
 #define ANDROID_HARDWARE_BUFFEREDTEXTOUTPUT_H
 
-#include <hwbinder/TextOutput.h>
+#include "TextOutput.h"
+
 #include <utils/threads.h>
 #include <sys/uio.h>
 
@@ -33,7 +34,7 @@ public:
         MULTITHREADED = 0x0001
     };
     
-                        BufferedTextOutput(uint32_t flags = 0);
+    explicit            BufferedTextOutput(uint32_t flags = 0);
     virtual             ~BufferedTextOutput();
     
     virtual status_t    print(const char* txt, size_t len);
@@ -49,9 +50,6 @@ private:
     struct BufferState;
     struct ThreadState;
     
-    static  ThreadState*getThreadState();
-    static  void        threadDestructor(void *st);
-    
             BufferState*getBuffer() const;
             
     uint32_t            mFlags;
@@ -63,7 +61,7 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-}; // namespace hardware
-}; // namespace android
+} // namespace hardware
+} // namespace android
 
 #endif // ANDROID_HARDWARE_BUFFEREDTEXTOUTPUT_H

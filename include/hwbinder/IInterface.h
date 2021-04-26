@@ -20,6 +20,10 @@
 
 #include <hwbinder/Binder.h>
 
+// WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,
+// this means that it is only relevant to HIDL. Any AIDL- or libbinder-specific
+// code should not try to use these things.
+
 namespace android {
 namespace hardware {
 // ----------------------------------------------------------------------
@@ -38,27 +42,10 @@ protected:
 // ----------------------------------------------------------------------
 
 template<typename INTERFACE>
-class BnInterface : public INTERFACE, public IInterface, public BHwBinder
-{
-public:
-                                BnInterface(const sp<INTERFACE>& impl);
-protected:
-    const sp<INTERFACE>         mImpl;
-    virtual IBinder*            onAsBinder();
-};
-
-template<typename INTERFACE>
-inline BnInterface<INTERFACE>::BnInterface(
-        const sp<INTERFACE>& impl) : mImpl(impl)
-{
-}
-// ----------------------------------------------------------------------
-
-template<typename INTERFACE>
 class BpInterface : public INTERFACE, public IInterface, public BpHwRefBase
 {
 public:
-                                BpInterface(const sp<IBinder>& remote);
+    explicit                    BpInterface(const sp<IBinder>& remote);
     virtual IBinder*            onAsBinder();
 };
 
@@ -67,11 +54,6 @@ public:
 // ----------------------------------------------------------------------
 // No user-serviceable parts after this...
 
-template<typename INTERFACE>
-IBinder* BnInterface<INTERFACE>::onAsBinder()
-{
-    return this;
-}
 
 template<typename INTERFACE>
 inline BpInterface<INTERFACE>::BpInterface(const sp<IBinder>& remote)
@@ -87,7 +69,7 @@ inline IBinder* BpInterface<INTERFACE>::onAsBinder()
 
 // ----------------------------------------------------------------------
 
-}; // namespace hardware
-}; // namespace android
+} // namespace hardware
+} // namespace android
 
 #endif // ANDROID_HARDWARE_IINTERFACE_H

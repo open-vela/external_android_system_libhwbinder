@@ -21,6 +21,10 @@
 #include <stdint.h>
 #include <hwbinder/IBinder.h>
 
+// WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,
+// this means that it is only relevant to HIDL. Any AIDL- or libbinder-specific
+// code should not try to use these things.
+
 // ---------------------------------------------------------------------------
 namespace android {
 namespace hardware {
@@ -37,13 +41,13 @@ public:
                                     TransactCallback callback = nullptr);
 
     virtual status_t    linkToDeath(const sp<DeathRecipient>& recipient,
-                                    void* cookie = NULL,
+                                    void* cookie = nullptr,
                                     uint32_t flags = 0);
 
     virtual status_t    unlinkToDeath(  const wp<DeathRecipient>& recipient,
-                                        void* cookie = NULL,
+                                        void* cookie = nullptr,
                                         uint32_t flags = 0,
-                                        wp<DeathRecipient>* outRecipient = NULL);
+                                        wp<DeathRecipient>* outRecipient = nullptr);
 
     virtual void        attachObject(   const void* objectID,
                                         void* object,
@@ -69,6 +73,9 @@ protected:
                                     TransactCallback callback = nullptr);
 
     // This must be called before the object is sent to another process. Not thread safe.
+    //
+    // If this is called with true, and the kernel supports it,
+    // IPCThreadState::getCallingSid will return values for remote processes.
     void                setRequestingSid(bool requestSid);
 
     int                 mSchedPolicy; // policy to run transaction from this node at
@@ -91,12 +98,13 @@ private:
 class BpHwRefBase : public virtual RefBase
 {
 protected:
-                            BpHwRefBase(const sp<IBinder>& o);
+    explicit                BpHwRefBase(const sp<IBinder>& o);
     virtual                 ~BpHwRefBase();
     virtual void            onFirstRef();
     virtual void            onLastStrongRef(const void* id);
     virtual bool            onIncStrongAttempted(uint32_t flags, const void* id);
 
+public:
     inline  IBinder*        remote() const          { return mRemote; }
 
 private:
@@ -108,8 +116,8 @@ private:
     std::atomic<int32_t>    mState;
 };
 
-}; // namespace hardware
-}; // namespace android
+} // namespace hardware
+} // namespace android
 
 // ---------------------------------------------------------------------------
 
