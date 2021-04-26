@@ -21,6 +21,10 @@
 #include <utils/KeyedVector.h>
 #include <utils/threads.h>
 
+// WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,
+// this means that it is only relevant to HIDL. Any AIDL- or libbinder-specific
+// code should not try to use these things.
+
 // ---------------------------------------------------------------------------
 namespace android {
 namespace hardware {
@@ -39,12 +43,12 @@ public:
                                     TransactCallback callback = nullptr);
 
     virtual status_t    linkToDeath(const sp<DeathRecipient>& recipient,
-                                    void* cookie = NULL,
+                                    void* cookie = nullptr,
                                     uint32_t flags = 0);
     virtual status_t    unlinkToDeath(  const wp<DeathRecipient>& recipient,
-                                        void* cookie = NULL,
+                                        void* cookie = nullptr,
                                         uint32_t flags = 0,
-                                        wp<DeathRecipient>* outRecipient = NULL);
+                                        wp<DeathRecipient>* outRecipient = nullptr);
 
     virtual void        attachObject(   const void* objectID,
                                         void* object,
@@ -55,9 +59,13 @@ public:
 
     virtual BpHwBinder*   remoteBinder();
 
-            status_t    setConstantData(const void* data, size_t size);
             void        sendObituary();
-
+                        // This refcount includes:
+                        // 1. Strong references to the node by this and other processes
+                        // 2. Temporary strong references held by the kernel during a
+                        //    transaction on the node.
+                        // It does NOT include local strong references to the node
+            ssize_t     getNodeStrongRefCount();
     class ObjectManager
     {
     public:
@@ -110,12 +118,11 @@ private:
             volatile int32_t    mObitsSent;
             Vector<Obituary>*   mObituaries;
             ObjectManager       mObjects;
-            Parcel*             mConstantData;
     mutable String16            mDescriptorCache;
 };
 
-}; // namespace hardware
-}; // namespace android
+} // namespace hardware
+} // namespace android
 
 // ---------------------------------------------------------------------------
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <hwbinder/TextOutput.h>
+#include "TextOutput.h"
 
 #include <hwbinder/Debug.h>
 
@@ -70,5 +70,5 @@ TextOutput& operator<<(TextOutput& to, const HexDump& val)
     return to;
 }
 
-}; // namespace hardware
-}; // namespace android
+} // namespace hardware
+} // namespace android

@@ -26,6 +26,10 @@
 
 #include <pthread.h>
 
+// WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,
+// this means that it is only relevant to HIDL. Any AIDL- or libbinder-specific
+// code should not try to use these things.
+
 // ---------------------------------------------------------------------------
 namespace android {
 namespace hardware {
@@ -37,25 +41,15 @@ class ProcessState : public virtual RefBase
 public:
     static  sp<ProcessState>    self();
     static  sp<ProcessState>    selfOrNull();
-
-            void                setContextObject(const sp<IBinder>& object);
-            sp<IBinder>         getContextObject(const sp<IBinder>& caller);
-
-            void                setContextObject(const sp<IBinder>& object,
-                                                 const String16& name);
-            sp<IBinder>         getContextObject(const String16& name,
-                                                 const sp<IBinder>& caller);
+    // Note: don't call self() or selfOrNull() before initWithMmapSize()
+    // with '0' as an argument, this is the same as selfOrNull
+    static  sp<ProcessState>    initWithMmapSize(size_t mmapSize); // size in bytes
 
             void                startThreadPool();
 
-    typedef bool (*context_check_func)(const String16& name,
-                                       const sp<IBinder>& caller,
-                                       void* userData);
-
-            bool                isContextManager(void) const;
-            bool                becomeContextManager(
-                                    context_check_func checkFunc,
-                                    void* userData);
+            sp<IBinder>         getContextObject(const sp<IBinder>& /*caller*/);
+                                // only call once, without creating a pool
+            void                becomeContextManager();
 
             sp<IBinder>         getStrongProxyForHandle(int32_t handle);
             wp<IBinder>         getWeakProxyForHandle(int32_t handle);
@@ -64,14 +58,36 @@ public:
             void                spawnPooledThread(bool isMain);
 
             status_t            setThreadPoolConfiguration(size_t maxThreads, bool callerJoinsPool);
+            status_t            enableOnewaySpamDetection(bool enable);
+            size_t              getMaxThreads();
             void                giveThreadPoolName();
 
             ssize_t             getKernelReferences(size_t count, uintptr_t* buf);
+                                // This refcount includes:
+                                // 1. Strong references to the node by this  and other processes
+                                // 2. Temporary strong references held by the kernel during a
+                                //    transaction on the node.
+                                // It does NOT include local strong references to the node
+            ssize_t             getStrongRefCountForNodeByHandle(int32_t handle);
+            size_t              getMmapSize();
+
+            enum class CallRestriction {
+                // all calls okay
+                NONE,
+                // log when calls are blocking
+                ERROR_IF_NOT_ONEWAY,
+                // abort process on blocking calls
+                FATAL_IF_NOT_ONEWAY,
+            };
+            // Sets calling restrictions for all transactions in this process. This must be called
+            // before any threads are spawned.
+            void setCallRestriction(CallRestriction restriction);
 
 private:
-    friend class IPCThreadState;
+    static  sp<ProcessState>    init(size_t mmapSize, bool requireMmapSize);
 
-                                ProcessState();
+    friend class IPCThreadState;
+            explicit            ProcessState(size_t mmapSize);
                                 ~ProcessState();
 
                                 ProcessState(const ProcessState& o);
@@ -90,7 +106,6 @@ private:
 
             // Protects thread count variable below.
             pthread_mutex_t     mThreadCountLock;
-            pthread_cond_t      mThreadCountDecrement;
             // Number of binder threads current executing a command.
             size_t              mExecutingThreadsCount;
             // Maximum number for binder threads allowed for this process.
@@ -102,22 +117,17 @@ private:
 
             Vector<handle_entry>mHandleToObject;
 
-            bool                mManagesContexts;
-            context_check_func  mBinderContextCheckFunc;
-            void*               mBinderContextUserData;
-
-            KeyedVector<String16, sp<IBinder> >
-                                mContexts;
-
-
             String8             mRootDir;
             bool                mThreadPoolStarted;
             bool                mSpawnThreadOnStart;
     volatile int32_t            mThreadPoolSeq;
+            const size_t        mMmapSize;
+
+            CallRestriction     mCallRestriction;
 };
 
-}; // namespace hardware
-}; // namespace android
+} // namespace hardware
+} // namespace android
 
 // ---------------------------------------------------------------------------
 
