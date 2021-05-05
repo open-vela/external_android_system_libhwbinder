@@ -22,19 +22,12 @@
 #include <hwbinder/ProcessState.h>
 #include <utils/Vector.h>
 
-#include <functional>
-
-// WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,
-// this means that it is only relevant to HIDL. Any AIDL- or libbinder-specific
-// code should not try to use these things.
-
 #if defined(_WIN32)
 typedef  int  uid_t;
 #endif
 
 // ---------------------------------------------------------------------------
 namespace android {
-
 namespace hardware {
 
 class IPCThreadState
@@ -91,30 +84,30 @@ public:
 
     static  void                shutdown();
 
+    // Call this to disable switching threads to background scheduling when
+    // receiving incoming IPC calls.  This is specifically here for the
+    // Android system process, since it expects to have background apps calling
+    // in to it but doesn't want to acquire locks in its services while in
+    // the background.
+    static  void                disableBackgroundScheduling(bool disable);
+
+            // Call blocks until the number of executing binder threads is less than
+            // the maximum number of binder threads threads allowed for this process.
+            void                blockUntilThreadAvailable();
+
             // Service manager registration
             void                setTheContextObject(sp<BHwBinder> obj);
 
             bool                isLooperThread();
             bool                isOnlyBinderThread();
 
-            // WARNING: DO NOT USE THIS API
-            //
-            // Returns a pointer to the stack from the last time a transaction
-            // was initiated by the kernel. Used to compare when making nested
-            // calls between multiple different transports.
-            const void*         getServingStackPointer() const;
-
-            // Tasks which are done on the binder thread after the thread returns to the
-            // threadpool.
-            void addPostCommandTask(const std::function<void(void)>& task);
-
-           private:
-            IPCThreadState();
-            ~IPCThreadState();
+private:
+                                IPCThreadState();
+                                ~IPCThreadState();
 
             status_t            sendReply(const Parcel& reply, uint32_t flags);
             status_t            waitForResponse(Parcel *reply,
-                                                status_t *acquireResult=nullptr);
+                                                status_t *acquireResult=NULL);
             status_t            talkWithDriver(bool doReceive=true);
             status_t            writeTransactionData(int32_t cmd,
                                                      uint32_t binderFlags,
@@ -136,6 +129,7 @@ public:
                                            void* cookie);
 
     const   sp<ProcessState>    mProcess;
+    const   pid_t               mMyThreadId;
             Vector<BHwBinder*>    mPendingStrongDerefs;
             Vector<RefBase::weakref_type*> mPendingWeakDerefs;
             Vector<RefBase*>    mPostWriteStrongDerefs;
@@ -143,22 +137,18 @@ public:
             Parcel              mIn;
             Parcel              mOut;
             status_t            mLastError;
-            const void*         mServingStackPointer;
             pid_t               mCallingPid;
             const char*         mCallingSid;
             uid_t               mCallingUid;
             int32_t             mStrictModePolicy;
             int32_t             mLastTransactionBinderFlags;
+            sp<BHwBinder>         mContextObject;
             bool                mIsLooper;
             bool mIsPollingThread;
-
-            std::vector<std::function<void(void)>> mPostCommandTasks;
-
-            ProcessState::CallRestriction mCallRestriction;
 };
 
-} // namespace hardware
-} // namespace android
+}; // namespace hardware
+}; // namespace android
 
 // ---------------------------------------------------------------------------
 
