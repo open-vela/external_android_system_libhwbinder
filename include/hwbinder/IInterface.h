@@ -20,10 +20,6 @@
 
 #include <hwbinder/Binder.h>
 
-// WARNING: this code is part of libhwbinder, a fork of libbinder. Generally,
-// this means that it is only relevant to HIDL. Any AIDL- or libbinder-specific
-// code should not try to use these things.
-
 namespace android {
 namespace hardware {
 // ----------------------------------------------------------------------
@@ -45,7 +41,7 @@ template<typename INTERFACE>
 class BpInterface : public INTERFACE, public IInterface, public BpHwRefBase
 {
 public:
-    explicit                    BpInterface(const sp<IBinder>& remote);
+                                BpInterface(const sp<IBinder>& remote);
     virtual IBinder*            onAsBinder();
 };
 
@@ -69,7 +65,7 @@ inline IBinder* BpInterface<INTERFACE>::onAsBinder()
 
 // ----------------------------------------------------------------------
 
-} // namespace hardware
-} // namespace android
+}; // namespace hardware
+}; // namespace android
 
 #endif // ANDROID_HARDWARE_IINTERFACE_H

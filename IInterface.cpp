@@ -33,19 +33,19 @@ IInterface::~IInterface() {
 // static
 sp<IBinder> IInterface::asBinder(const IInterface* iface)
 {
-    if (iface == nullptr) return nullptr;
+    if (iface == NULL) return NULL;
     return const_cast<IInterface*>(iface)->onAsBinder();
 }
 
 // static
 sp<IBinder> IInterface::asBinder(const sp<IInterface>& iface)
 {
-    if (iface == nullptr) return nullptr;
+    if (iface == NULL) return NULL;
     return iface->onAsBinder();
 }
 
 
 // ---------------------------------------------------------------------------
 
-} // namespace hardware
-} // namespace android
+}; // namespace hardware
+}; // namespace android

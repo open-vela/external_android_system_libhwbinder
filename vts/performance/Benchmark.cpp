@@ -106,7 +106,7 @@ static void BM_sendVec_binderize(benchmark::State& state) {
 }
 
 int main(int argc, char* argv []) {
-    android::hardware::details::setTrebleTestingOverride(true);
+    setenv("TREBLE_TESTING_OVERRIDE", "true", true);
 
     enum HwBinderMode {
         kBinderize = 0,
