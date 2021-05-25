@@ -1337,19 +1337,6 @@ bool Parcel::verifyBufferObject(const binder_buffer_object *buffer_obj,
                   static_cast<uint64_t>(buffer_obj->parent_offset), parentOffset);
             return false;
         }
-
-        binder_buffer_object *parentBuffer =
-            reinterpret_cast<binder_buffer_object*>(mData + mObjects[parent]);
-        void* bufferInParent = *reinterpret_cast<void**>(
-            reinterpret_cast<uint8_t*>(parentBuffer->buffer) + parentOffset);
-        void* childBuffer = reinterpret_cast<void*>(buffer_obj->buffer);
-
-        if (bufferInParent != childBuffer) {
-              ALOGE("Buffer in parent %p differs from embedded buffer %p",
-                    bufferInParent, childBuffer);
-              android_errorWriteLog(0x534e4554, "179289794");
-              return false;
-        }
     }
 
     return true;
@@ -1435,31 +1422,12 @@ status_t Parcel::readNullableNativeHandleNoDup(const native_handle_t **handle,
                                                size_t parent_buffer_handle,
                                                size_t parent_offset) const
 {
+    status_t status;
     uint64_t nativeHandleSize;
-    status_t status = readUint64(&nativeHandleSize);
-    if (status != OK) {
-        return BAD_VALUE;
-    }
+    size_t fdaParent;
 
-    if (nativeHandleSize == 0) {
-        // If !embedded, then parent_* vars are 0 and don't actually correspond
-        // to anything. In that case, we're actually reading this data into
-        // writable memory, and the handle returned from here will actually be
-        // used (rather than be ignored).
-        if (embedded) {
-            binder_buffer_object *parentBuffer =
-                reinterpret_cast<binder_buffer_object*>(mData + mObjects[parent_buffer_handle]);
-
-            void* bufferInParent = *reinterpret_cast<void**>(
-                reinterpret_cast<uint8_t*>(parentBuffer->buffer) + parent_offset);
-
-            if (bufferInParent != nullptr) {
-                  ALOGE("Buffer in (handle) parent %p is not nullptr.", bufferInParent);
-                  android_errorWriteLog(0x534e4554, "179289794");
-                  return BAD_VALUE;
-            }
-        }
-
+    status = readUint64(&nativeHandleSize);
+    if (status != OK || nativeHandleSize == 0) {
         *handle = nullptr;
         return status;
     }
@@ -1469,7 +1437,6 @@ status_t Parcel::readNullableNativeHandleNoDup(const native_handle_t **handle,
         return BAD_VALUE;
     }
 
-    size_t fdaParent;
     if (embedded) {
         status = readNullableEmbeddedBuffer(nativeHandleSize, &fdaParent,
                                             parent_buffer_handle, parent_offset,
@@ -1786,7 +1753,7 @@ status_t Parcel::restartWrite(size_t desired)
 
     releaseObjects();
 
-    if (data || desired == 0) {
+    if (data) {
         LOG_ALLOC("Parcel %p: restart from %zu to %zu capacity", this, mDataCapacity, desired);
         if (mDataCapacity > desired) {
             gParcelGlobalAllocSize -= (mDataCapacity - desired);
