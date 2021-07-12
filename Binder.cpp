@@ -16,20 +16,14 @@
 
 #include <hwbinder/Binder.h>
 
-#include <android-base/macros.h>
-#include <cutils/android_filesystem_config.h>
-#include <cutils/multiuser.h>
+#include <atomic>
+#include <utils/misc.h>
 #include <hwbinder/BpHwBinder.h>
 #include <hwbinder/IInterface.h>
-#include <hwbinder/IPCThreadState.h>
 #include <hwbinder/Parcel.h>
-#include <utils/Log.h>
-#include <utils/misc.h>
 
 #include <linux/sched.h>
 #include <stdio.h>
-
-#include <atomic>
 
 namespace android {
 namespace hardware {
@@ -118,15 +112,6 @@ status_t BHwBinder::transact(
 
     if (reply != nullptr && (flags & FLAG_CLEAR_BUF)) {
         reply->markSensitive();
-    }
-
-    // extra comment to try to force running all tests
-    if (UNLIKELY(code == HIDL_DEBUG_TRANSACTION)) {
-        uid_t uid = IPCThreadState::self()->getCallingUid();
-        if (multiuser_get_app_id(uid) >= AID_APP_START) {
-            ALOGE("Can not call IBase::debug from apps");
-            return PERMISSION_DENIED;
-        }
     }
 
     status_t err = NO_ERROR;
