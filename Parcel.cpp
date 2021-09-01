@@ -1464,8 +1464,8 @@ status_t Parcel::readNullableNativeHandleNoDup(const native_handle_t **handle,
         return status;
     }
 
-    if (nativeHandleSize < sizeof(native_handle_t)) {
-        ALOGE("Received a native_handle_t size that was too small.");
+    if (nativeHandleSize < sizeof(native_handle_t) || nativeHandleSize > std::numeric_limits<uint32_t>::max()) {
+        ALOGE("Invalid native_handle_t size: %" PRIu64, nativeHandleSize);
         return BAD_VALUE;
     }
 
