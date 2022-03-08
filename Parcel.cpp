@@ -1333,8 +1333,14 @@ bool Parcel::verifyBufferObject(const binder_buffer_object *buffer_obj,
             return false;
         }
         if (buffer_obj->parent_offset != parentOffset) {
-              ALOGE("Buffer parent offset %" PRIu64 " does not match expected offset %zu.",
+            ALOGE("Buffer parent offset %" PRIu64 " does not match expected offset %zu.",
                   static_cast<uint64_t>(buffer_obj->parent_offset), parentOffset);
+            return false;
+        }
+
+        // checked by kernel driver, but needed for fuzzer
+        if (parent >= mObjectsSize) {
+            ALOGE("Parent index %zu but only have %zu objects", parent, mObjectsSize);
             return false;
         }
 
