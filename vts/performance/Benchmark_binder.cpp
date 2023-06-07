@@ -21,6 +21,7 @@
 #include <utils/String16.h>
 #include <utils/StrongPointer.h>
 
+#include <spawn.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -29,7 +30,6 @@
 #include <android/tests/binder/BnBenchmark.h>
 
 // libutils:
-using android::OK;
 using android::sp;
 using android::status_t;
 using android::String16;
@@ -92,15 +92,21 @@ static void BM_sendVec_binder(benchmark::State& state) {
 
 BENCHMARK(BM_sendVec_binder)->RangeMultiplier(2)->Range(4, 65536);
 
-int main(int argc, char* argv []) {
-    ::benchmark::Initialize(&argc, argv);
+static void startBenchmarks(char *name) {
+    char *args[] = {name, "1", NULL};
+    pid_t pid;
 
-    pid_t pid = fork();
-    if (pid == 0) {
+    posix_spawn(&pid, name, nullptr, nullptr, args, nullptr);
+}
+
+extern "C" int main(int argc, char* argv []) {
+    if (argc == 2) {
         // Child, start benchmarks
         ::benchmark::RunSpecifiedBenchmarks();
     } else {
+        ::benchmark::Initialize(&argc, argv);
         startServer();
+        startBenchmarks(argv[0]);
         while (true) {
             int stat, retval;
             retval = wait(&stat);
@@ -109,4 +115,5 @@ int main(int argc, char* argv []) {
             }
         }
     };
+    return 0;
 }
