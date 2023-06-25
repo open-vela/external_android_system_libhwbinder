@@ -93,7 +93,7 @@ BpHwBinder::BpHwBinder(int32_t handle)
     , mObitsSent(0)
     , mObituaries(nullptr)
 {
-    ALOGV("Creating BpHwBinder %p handle %d\n", this, mHandle);
+    ALOGV("Creating BpHwBinder %p handle %" PRId32 "\n", this, mHandle);
 
     extendObjectLifetime(OBJECT_LIFETIME_WEAK);
     IPCThreadState::self()->incWeakHandle(handle, this);
@@ -138,7 +138,7 @@ status_t BpHwBinder::linkToDeath(
                 if (!mObituaries) {
                     return NO_MEMORY;
                 }
-                ALOGV("Requesting death notification: %p handle %d\n", this, mHandle);
+                ALOGV("Requesting death notification: %p handle %" PRId32 "\n", this, mHandle);
                 getWeakRefs()->incWeak(this);
                 IPCThreadState* self = IPCThreadState::self();
                 self->requestDeathNotification(mHandle, this);
@@ -173,7 +173,7 @@ status_t BpHwBinder::unlinkToDeath(
             }
             mObituaries->removeAt(i);
             if (mObituaries->size() == 0) {
-                ALOGV("Clearing death notification: %p handle %d\n", this, mHandle);
+                ALOGV("Clearing death notification: %p handle %" PRId32 "\n", this, mHandle);
                 IPCThreadState* self = IPCThreadState::self();
                 self->clearDeathNotification(mHandle, this);
                 self->flushCommands();
@@ -189,7 +189,7 @@ status_t BpHwBinder::unlinkToDeath(
 
 void BpHwBinder::sendObituary()
 {
-    ALOGV("Sending obituary for proxy %p handle %d, mObitsSent=%s\n",
+    ALOGV("Sending obituary for proxy %p handle %" PRId32 ", mObitsSent=%s\n",
         this, mHandle, mObitsSent ? "true" : "false");
 
     mAlive = 0;
@@ -198,7 +198,7 @@ void BpHwBinder::sendObituary()
     mLock.lock();
     Vector<Obituary>* obits = mObituaries;
     if(obits != nullptr) {
-        ALOGV("Clearing sent death notification: %p handle %d\n", this, mHandle);
+        ALOGV("Clearing sent death notification: %p handle %" PRId32 "\n", this, mHandle);
         IPCThreadState* self = IPCThreadState::self();
         self->clearDeathNotification(mHandle, this);
         self->flushCommands();
@@ -265,7 +265,7 @@ BpHwBinder* BpHwBinder::remoteBinder()
 
 BpHwBinder::~BpHwBinder()
 {
-    ALOGV("Destroying BpHwBinder %p handle %d\n", this, mHandle);
+    ALOGV("Destroying BpHwBinder %p handle %" PRId32 "\n", this, mHandle);
 
     IPCThreadState* ipc = IPCThreadState::self();
 
@@ -277,14 +277,14 @@ BpHwBinder::~BpHwBinder()
 
 void BpHwBinder::onFirstRef()
 {
-    ALOGV("onFirstRef BpHwBinder %p handle %d\n", this, mHandle);
+    ALOGV("onFirstRef BpHwBinder %p handle %" PRId32 "\n", this, mHandle);
     IPCThreadState* ipc = IPCThreadState::self();
     if (ipc) ipc->incStrongHandle(mHandle, this);
 }
 
 void BpHwBinder::onLastStrongRef(const void* /*id*/)
 {
-    ALOGV("onLastStrongRef BpHwBinder %p handle %d\n", this, mHandle);
+    ALOGV("onLastStrongRef BpHwBinder %p handle %" PRId32 "\n", this, mHandle);
     IF_ALOGV() {
         printRefs();
     }
@@ -317,7 +317,7 @@ void BpHwBinder::onLastStrongRef(const void* /*id*/)
 
 bool BpHwBinder::onIncStrongAttempted(uint32_t /*flags*/, const void* /*id*/)
 {
-    ALOGV("onIncStrongAttempted BpHwBinder %p handle %d\n", this, mHandle);
+    ALOGV("onIncStrongAttempted BpHwBinder %p handle %" PRId32 "\n", this, mHandle);
     IPCThreadState* ipc = IPCThreadState::self();
     return ipc ? ipc->attemptIncStrongHandle(mHandle) == NO_ERROR : false;
 }
