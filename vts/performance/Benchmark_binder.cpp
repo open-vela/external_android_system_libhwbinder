@@ -93,7 +93,7 @@ static void BM_sendVec_binder(benchmark::State& state) {
 BENCHMARK(BM_sendVec_binder)->RangeMultiplier(2)->Range(4, 65536);
 
 static void startBenchmarks(char *name) {
-    char *args[] = {name, "1", NULL};
+    char* args[] = {name, (char*)"1", NULL};
     pid_t pid;
 
     posix_spawn(&pid, name, nullptr, nullptr, args, nullptr);
