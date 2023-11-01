@@ -27,7 +27,7 @@ STACKSIZE = $(CONFIG_BINDER_PERFORMANCE_STACKSIZE)
 
 ifneq ($(CONFIG_BINDER_PERFORMANCE_TEST),)
 MAINSRC  += vts/performance/Benchmark_binder.cpp
-PROGNAME += Benchmark_binder
+PROGNAME += aidl_binder
 endif
 
 CXXFLAGS += -Wno-shadow
